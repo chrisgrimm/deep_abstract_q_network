@@ -9,7 +9,7 @@ import pygame
 class AtariEnvironment(interfaces.Environment):
 
     def __init__(self, atari_rom, frame_skip=4, noop_max=30, terminate_on_end_life=False, random_seed=123,
-                 frame_history_length=4):
+                 frame_history_length=4, use_gui=True):
         self.ale = ALEInterface()
         self.ale.setInt('random_seed', random_seed)
         self.ale.setInt('frame_skip', 1)
@@ -33,7 +33,7 @@ class AtariEnvironment(interfaces.Environment):
         self.onehot_to_atari = dict(zip(range(len(atari_actions)), atari_actions))
         self.screen_image = np.zeros(self.screen_height * self.screen_width, dtype=np.uint8)
 
-        self.use_gui = False
+        self.use_gui = use_gui
         self.original_frame = np.zeros((h, w), dtype=np.uint8)
         self.refresh_time = datetime.timedelta(milliseconds=1000 / 60)
         self.last_refresh = datetime.datetime.now()
