@@ -23,14 +23,19 @@ class AtariEnvironment(interfaces.Environment):
         image = image.reshape([self.screen_height, self.screen_width, 3])
         image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)[:, :, 2]
         image = cv2.resize(image, (84, 84))
-        image = cv2.resize(image, (64, 64)) / 255.0
         return image
 
     def perform_action(self, action):
+        state = self.get_current_state()
+        reward = 0
         for i in range(self.frame_skip):
-            self.ale.act(action)
+            reward += self.ale.act(action)
             if i >= self.frame_skip - 2:
                 self.last_two_frames = [self.last_two_frames[1], self._get_frame()]
+        next_state = self.get_current_state()
+        is_terminal = self.is_current_state_terminal()
+        return state, action, reward, next_state, is_terminal
+
 
 
     def get_current_state(self):
