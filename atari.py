@@ -2,6 +2,7 @@ from ale_python_interface import ALEInterface
 import interfaces
 import numpy as np
 import cv2
+import datetime
 
 class AtariEnvironment(interfaces.Environment):
 
@@ -14,17 +15,23 @@ class AtariEnvironment(interfaces.Environment):
         w, h = self.ale.getScreenDims()
         self.screen_width = w
         self.screen_height = h
-        self.last_two_frames = [np.zeros((h, w), dtype=np.float32), np.zeros((h, w), dtype=np.float32)]
-        self.frame_history = np.zeros((h, w, 4), dtype=np.float32)
+        self.last_two_frames = [np.zeros((84, 84), dtype=np.float32), np.zeros((84, 84), dtype=np.float32)]
+        self.frame_history = np.zeros((84, 84, 4), dtype=np.float32)
         atari_actions = self.ale.getMinimalActionSet()
         self.atari_to_onehot = dict(zip(atari_actions, range(len(atari_actions))))
         self.onehot_to_atari = dict(zip(range(len(atari_actions)), atari_actions))
+
+        self.use_gui = True
+        self.original_frame = np.zeros((h, w, 3), dtype=np.uint8)
+        self.refresh_time = datetime.timedelta(milliseconds=1000/60)
+        self.last_refresh = datetime.datetime.now()
 
 
     def _get_frame(self):
         image = np.zeros(self.screen_height*self.screen_width*3, dtype=np.uint8)
         self.ale.getScreenRGB(image)
         image = image.reshape([self.screen_height, self.screen_width, 3])
+        self.original_frame = image
         image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)[:, :, 2]
         image = cv2.resize(image, (84, 84))
         return image
@@ -37,6 +44,10 @@ class AtariEnvironment(interfaces.Environment):
             reward += self.ale.act(action)
             if i >= self.frame_skip - 2:
                 self.last_two_frames = [self.last_two_frames[1], self._get_frame()]
+
+        if self.use_gui:
+            self.refresh_gui()
+
         self.frame_history[:, :, :-1] = self.frame_history[:, :, 1:]
         self.frame_history[:, :, -1] = np.max(self.last_two_frames, axis=0)
         next_state = self.get_current_state()
@@ -55,4 +66,12 @@ class AtariEnvironment(interfaces.Environment):
 
     def is_current_state_terminal(self):
         return self.ale.game_over()
+
+    def refresh_gui(self):
+        current_time = datetime.datetime.now()
+        if (current_time - self.last_refresh) > self.refresh_time:
+            self.last_refresh = current_time
+            cv2.imshow('Atari', self.original_frame)
+            cv2.waitKey(1)
+
 

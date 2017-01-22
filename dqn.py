@@ -67,6 +67,8 @@ class DQN_Agent(interfaces.LearningAgent):
         self.epsilon_steps = 1000000
         self.action_ticker = 1
 
+        self.sess.run(tf.initialize_all_variables())
+
 
     def update_q_values(self):
         S1, A, R, S2, T  = zip(*self.replay_buffer.sample(32))
@@ -88,7 +90,7 @@ class DQN_Agent(interfaces.LearningAgent):
                 action = self.get_action(state)
             state, action, reward, next_state, is_terminal = environment.perform_action(action)
             total_reward += reward
-            self.replay_buffer.append((state, action, reward, next_state, is_terminal))
+            self.replay_buffer.append(state[:,:,-1], action, reward, next_state[:,:,-1], is_terminal)
             if self.replay_buffer.size() > 50000 and self.action_ticker % 4 == 0:
                 loss = self.update_q_values()
             if self.action_ticker % 4*10000 == 0:
