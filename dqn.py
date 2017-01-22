@@ -41,7 +41,6 @@ def make_copy_op(source_scope, dest_scope):
     return ops
 
 class DQN_Agent(interfaces.LearningAgent):
-    # TODO divide frames by 255.0
     def __init__(self, num_actions, gamma=0.99, learning_rate=0.00005, frame_size=84):
         self.sess = tf.Session()
         self.inp_actions = tf.placeholder(tf.float32, [None, num_actions])
@@ -58,8 +57,7 @@ class DQN_Agent(interfaces.LearningAgent):
         maxQ = tf.reduce_max(self.q_target, reduction_indices=1)
         y = self.inp_reward + (1 - self.inp_terminated) * gamma * maxQ
         self.loss = tf.reduce_mean(tf.square(tf.reduce_sum(self.inp_actions * self.q_network, reduction_indices=1) - y))
-        # TODO FIGURE OUT RMS PROP STUFF! AHHHHH!
-        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95)
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, epsilon=0.1)
         gradients = optimizer.compute_gradients(self.loss, var_list=nh.get_vars('network'))
         capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gradients]
         self.train_op = optimizer.apply_gradients(capped_gvs)
@@ -71,15 +69,17 @@ class DQN_Agent(interfaces.LearningAgent):
 
 
     def update_q_values(self):
-        # TODO convert actions into onehot
         S1, A, R, S2, T  = zip(*self.replay_buffer.sample(32))
-        [_, loss] = self.sess.run([self.train_op, self.loss], feed_dict={self.inp_frames: S1, self.inp_actions: A,
-                                                             self.inp_sp_frames: S2, self.inp_reward: R,
+        [_, loss] = self.sess.run([self.train_op, self.loss], feed_dict={self.inp_frames: S1 / 255.0, self.inp_actions: A,
+                                                             self.inp_sp_frames: S2 / 255.0, self.inp_reward: np.sign(R),
                                                              self.inp_terminated: T})
         return loss
 
+    # TODO add in support for NO-OP frames at the beginning of each episode.
     def run_learning_episode(self, environment):
         environment.reset_environment()
+        episode_steps = 0
+        total_reward = 0
         while not environment.is_current_state_terminal():
             state = environment.get_current_state()
             if np.random.uniform(0, 1) < self.epsilon:
@@ -87,15 +87,19 @@ class DQN_Agent(interfaces.LearningAgent):
             else:
                 action = self.get_action(state)
             state, action, reward, next_state, is_terminal = environment.perform_action(action)
+            total_reward += reward
             self.replay_buffer.append((state, action, reward, next_state, is_terminal))
             if self.replay_buffer.size() > 50000 and self.action_ticker % 4 == 0:
                 loss = self.update_q_values()
-            if self.action_ticker % 10000 == 0:
+            if self.action_ticker % 4*10000 == 0:
                 self.sess.run(self.copy_op)
+            self.action_ticker += 1
+            episode_steps += 1
+        return episode_steps, total_reward
 
 
     def get_action(self, state):
-        [q_values] = self.sess.run([self.q_network], feed_dict={self.inp_frames: state / 255.0})
+        [q_values] = self.sess.run([self.q_network], feed_dict={self.inp_frames: [state / 255.0]})
         return np.argmax(q_values[0])
 
 
