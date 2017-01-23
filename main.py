@@ -10,7 +10,7 @@ env = atari.AtariEnvironment('./roms/pong.bin')
 agent = dqn.DQN_Agent(len(env.ale.getMinimalActionSet()))
 
 
-def evaluate_agent_reward(steps, env, agent):
+def evaluate_agent_reward(steps, env, agent, epsilon):
     env.reset_environment()
     total_reward = 0
     episode_rewards = []
@@ -20,7 +20,11 @@ def evaluate_agent_reward(steps, env, agent):
             total_reward = 0
             env.reset_environment()
         state = env.get_current_state()
-        action = agent.get_action(state)
+        if np.random.uniform(0, 1) < epsilon:
+            action = np.random.choice(env.get_actions_for_state(state))
+        else:
+            action = agent.get_action(state)
+
         state, action, reward, next_state, is_terminal = env.perform_action(action)
         total_reward += reward
     if not episode_rewards:
