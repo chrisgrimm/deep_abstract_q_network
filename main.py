@@ -46,5 +46,5 @@ while step_num < num_steps:
     if steps_until_test <= 0:
         steps_until_test += test_interval
         print 'Evaluating network...'
-        episode_rewards = evaluate_agent_reward(test_frames, env, agent)
+        episode_rewards = evaluate_agent_reward(test_frames, env, agent, 0.05)
         print 'Mean Reward:', np.mean(episode_reward)

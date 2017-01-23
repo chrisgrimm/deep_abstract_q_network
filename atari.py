@@ -15,8 +15,8 @@ class AtariEnvironment(interfaces.Environment):
         w, h = self.ale.getScreenDims()
         self.screen_width = w
         self.screen_height = h
-        self.last_two_frames = [np.zeros((84, 84), dtype=np.float32), np.zeros((84, 84), dtype=np.float32)]
-        self.frame_history = np.zeros((84, 84, 4), dtype=np.float32)
+        self.last_two_frames = [np.zeros((84, 84), dtype=np.uint8), np.zeros((84, 84), dtype=np.uint8)]
+        self.frame_history = np.zeros((84, 84, 4), dtype=np.uint8)
         atari_actions = self.ale.getMinimalActionSet()
         self.atari_to_onehot = dict(zip(atari_actions, range(len(atari_actions))))
         self.onehot_to_atari = dict(zip(range(len(atari_actions)), atari_actions))
@@ -61,6 +61,7 @@ class AtariEnvironment(interfaces.Environment):
 
     def reset_environment(self):
         self.ale.reset_game()
+        self.frame_history[:, :, -1] = self._get_frame()
 
     def is_current_state_terminal(self):
         return self.ale.game_over()

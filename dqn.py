@@ -42,10 +42,13 @@ def make_copy_op(source_scope, dest_scope):
 
 class DQN_Agent(interfaces.LearningAgent):
     def __init__(self, num_actions, gamma=0.99, learning_rate=0.00005, frame_size=84):
-        self.sess = tf.Session()
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        self.sess = tf.Session(config=config)
+
         self.inp_actions = tf.placeholder(tf.float32, [None, num_actions])
-        self.inp_frames = tf.placeholder(tf.float32, [None, 84, 84, 4]) / 255.0
-        self.inp_sp_frames = tf.placeholder(tf.float32, [None, 84, 84, 4]) / 255.0
+        self.inp_frames = tf.image.convert_image_dtype(tf.placeholder(tf.uint8, [None, 84, 84, 4]), tf.float32)
+        self.inp_sp_frames = tf.image.convert_image_dtype(tf.placeholder(tf.uint8, [None, 84, 84, 4]), tf.float32)
         self.inp_terminated = tf.placeholder(tf.float32, [None])
         self.inp_reward = tf.sign(tf.placeholder(tf.float32, [None]))
         self.gamma = gamma
