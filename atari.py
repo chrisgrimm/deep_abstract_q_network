@@ -26,13 +26,11 @@ class AtariEnvironment(interfaces.Environment):
         self.refresh_time = datetime.timedelta(milliseconds=1000/60)
         self.last_refresh = datetime.datetime.now()
 
-
     def _get_frame(self):
-        image = np.zeros(self.screen_height*self.screen_width*3, dtype=np.uint8)
-        self.ale.getScreenRGB(image)
-        image = image.reshape([self.screen_height, self.screen_width, 3])
+        image = np.zeros(self.screen_height*self.screen_width, dtype=np.uint8)
+        self.ale.getScreenGrayscale(image)
+        image = image.reshape([self.screen_height, self.screen_width, 1])
         self.original_frame = image
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)[:, :, 2]
         image = cv2.resize(image, (84, 84))
         return image
 
@@ -52,7 +50,7 @@ class AtariEnvironment(interfaces.Environment):
         self.frame_history[:, :, -1] = np.max(self.last_two_frames, axis=0)
         next_state = self.get_current_state()
         is_terminal = self.is_current_state_terminal()
-        return state, action, reward, next_state, is_terminal
+        return state, onehot_index_action, reward, next_state, is_terminal
 
     def get_current_state(self):
         return np.copy(self.frame_history)

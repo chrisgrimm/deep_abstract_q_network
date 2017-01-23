@@ -27,7 +27,8 @@ def evaluate_agent_reward(steps, env, agent):
         episode_rewards.append(total_reward)
     return episode_rewards
 
-test_interval = 2500
+test_interval = 250000
+test_frames = 125000
 
 step_num = 0
 steps_until_test = test_interval
@@ -41,5 +42,5 @@ while step_num < num_steps:
     if steps_until_test <= 0:
         steps_until_test += test_interval
         print 'Evaluating network...'
-        episode_rewards = evaluate_agent_reward(1250, env, agent)
+        episode_rewards = evaluate_agent_reward(test_frames, env, agent)
         print 'Mean Reward:', np.mean(episode_reward)

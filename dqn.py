@@ -44,10 +44,10 @@ class DQN_Agent(interfaces.LearningAgent):
     def __init__(self, num_actions, gamma=0.99, learning_rate=0.00005, frame_size=84):
         self.sess = tf.Session()
         self.inp_actions = tf.placeholder(tf.float32, [None, num_actions])
-        self.inp_frames = tf.placeholder(tf.float32, [None, 84, 84, 4])
-        self.inp_sp_frames = tf.placeholder(tf.float32, [None, 84, 84, 4])
+        self.inp_frames = tf.placeholder(tf.float32, [None, 84, 84, 4]) / 255.0
+        self.inp_sp_frames = tf.placeholder(tf.float32, [None, 84, 84, 4]) / 255.0
         self.inp_terminated = tf.placeholder(tf.float32, [None])
-        self.inp_reward = tf.placeholder(tf.float32, [None])
+        self.inp_reward = tf.sign(tf.placeholder(tf.float32, [None]))
         self.gamma = gamma
         with tf.variable_scope('network'):
             self.q_network = hook_dqn(self.inp_frames, num_actions)
@@ -67,13 +67,18 @@ class DQN_Agent(interfaces.LearningAgent):
         self.epsilon_steps = 1000000
         self.action_ticker = 1
 
+        self.num_actions = num_actions
+        self.batch_size = 32
+
         self.sess.run(tf.initialize_all_variables())
 
-
     def update_q_values(self):
-        S1, A, R, S2, T  = zip(*self.replay_buffer.sample(32))
-        [_, loss] = self.sess.run([self.train_op, self.loss], feed_dict={self.inp_frames: S1 / 255.0, self.inp_actions: A,
-                                                             self.inp_sp_frames: S2 / 255.0, self.inp_reward: np.sign(R),
+        S1, A, R, S2, T  = self.replay_buffer.sample(self.batch_size)
+        Aonehot = np.zeros((self.batch_size, self.num_actions))
+        Aonehot[range(len(A)), A] = 1
+
+        [_, loss] = self.sess.run([self.train_op, self.loss], feed_dict={self.inp_frames: S1, self.inp_actions: Aonehot,
+                                                             self.inp_sp_frames: S2, self.inp_reward: R,
                                                              self.inp_terminated: T})
         return loss
 
@@ -93,12 +98,11 @@ class DQN_Agent(interfaces.LearningAgent):
             self.replay_buffer.append(state[:,:,-1], action, reward, next_state[:,:,-1], is_terminal)
             if self.replay_buffer.size() > 50000 and self.action_ticker % 4 == 0:
                 loss = self.update_q_values()
-            if self.action_ticker % 4*10000 == 0:
+            if self.action_ticker % (4*10000) == 0:
                 self.sess.run(self.copy_op)
             self.action_ticker += 1
             episode_steps += 1
         return episode_steps, total_reward
-
 
     def get_action(self, state):
         [q_values] = self.sess.run([self.q_network], feed_dict={self.inp_frames: [state / 255.0]})
@@ -115,10 +119,10 @@ class ReplayBuffer(object):
         self.frame_history = frame_history
         # S1 A R S2
         # to grab SARSA(0) -> S(0) A(0) R(0) S(1) T(0)
-        self.screens = np.zeros((capacity, 84, 84))
-        self.action = np.zeros(capacity)
-        self.reward = np.zeros(capacity)
-        self.terminated = np.zeros(capacity)
+        self.screens = np.zeros((capacity, 84, 84), dtype=np.uint8)
+        self.action = np.zeros(capacity, dtype=np.uint8)
+        self.reward = np.zeros(capacity, dtype=np.float32)
+        self.terminated = np.zeros(capacity, dtype=np.uint8)
 
     def append(self, S1, A, R, S2, T):
         self.screens[self.t, :, :] = S1
@@ -130,17 +134,15 @@ class ReplayBuffer(object):
             self.t = 0
             self.filled = True
 
-
     def get_window(self, array, start, end):
         # these cases aren't exclusive if this isn't true.
-        assert self.capacity > self.frame_history + 1
+        # assert self.capacity > self.frame_history + 1
         if start < 0:
-            return np.concatenate((array[start:0], array[0:end]), axis=0)
+            return np.concatenate((array[start:], array[:end]), axis=0)
         elif end > self.capacity:
             return np.concatenate((array[start:], array[:end-self.capacity]), axis=0)
         else:
             return array[start:end]
-
 
     def get_sample(self, index):
         start_frames = index - (self.frame_history - 1)
@@ -149,10 +151,10 @@ class ReplayBuffer(object):
         terminations = self.get_window(self.terminated, start_frames, end_frames-1)
         # zeros the frames that are not in the current episode.
         mask = (np.cumsum(terminations[::-1]) == 0)[::-1]
-        S0 = np.transpose(frames[:-1] * mask, [1, 2, 0])
-        S1 = np.transpose(frames[1:] * np.concatenate([mask[1:], [1]]), [1, 2, 0])
-        return S0, self.action[index], self.reward[index], S1, self.terminated[index]
 
+        S0 = np.transpose(frames[:-1], [1, 2, 0]) * mask
+        S1 = np.transpose(frames[1:], [1, 2, 0]) * np.concatenate([mask[1:], [1]])
+        return S0, self.action[index], self.reward[index], S1, self.terminated[index]
 
     def sample(self, num_samples):
         if not self.filled:
@@ -161,8 +163,22 @@ class ReplayBuffer(object):
             idx = np.random.randint(0, self.capacity - (self.frame_history + 1), size=num_samples)
             idx = idx - (self.t + self.frame_history + 1)
             idx = idx % self.capacity
-        samples = [self.get_sample(i) for i in idx]
-        return samples
+
+        S0 = []
+        A = []
+        R = []
+        S1 = []
+        T = []
+
+        for i, sample_i in enumerate(idx):
+            s0, a, r, s1, t = self.get_sample(sample_i)
+            S0.append(s0)
+            A.append(a)
+            R.append(r)
+            S1.append(s1)
+            T.append(t)
+
+        return S0, A, R, S1, T
 
     def size(self):
         if self.filled:
