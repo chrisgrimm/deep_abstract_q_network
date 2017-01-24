@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 import datetime
 import copy
+import pygame
 
 class AtariEnvironment(interfaces.Environment):
 
@@ -24,9 +25,11 @@ class AtariEnvironment(interfaces.Environment):
         self.screen_image = np.zeros(self.screen_height * self.screen_width, dtype=np.uint8)
 
         self.use_gui = True
-        self.original_frame = np.zeros((h, w, 3), dtype=np.uint8)
-        self.refresh_time = datetime.timedelta(milliseconds=1000/60)
+        self.original_frame = np.zeros((h, w), dtype=np.uint8)
+        self.refresh_time = datetime.timedelta(milliseconds=1000 / 60)
         self.last_refresh = datetime.datetime.now()
+        if (self.use_gui):
+            self.gui_screen = pygame.display.set_mode((w, h))
 
     def _get_frame(self):
         self.ale.getScreenGrayscale(self.screen_image)
@@ -75,7 +78,9 @@ class AtariEnvironment(interfaces.Environment):
         current_time = datetime.datetime.now()
         if (current_time - self.last_refresh) > self.refresh_time:
             self.last_refresh = current_time
-            cv2.imshow('Atari', self.original_frame)
-            cv2.waitKey(1)
+
+            gui_image = np.tile(np.transpose(self.original_frame, axes=(1, 0, 2)), [1, 1, 3])
+            pygame.surfarray.blit_array(self.gui_screen, gui_image)
+            pygame.display.update()
 
 
