@@ -41,10 +41,10 @@ while step_num < num_steps:
     episode_steps, episode_reward = agent.run_learning_episode(env)
     end_time = datetime.datetime.now()
     step_num += episode_steps
-    print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (end_time - start_time).total_seconds()
+    print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (end_time - start_time).total_seconds(), '\tEps:', agent.epsilon
     steps_until_test -= episode_steps
     if steps_until_test <= 0:
         steps_until_test += test_interval
         print 'Evaluating network...'
         episode_rewards = evaluate_agent_reward(test_frames, env, agent, 0.05)
-        print 'Mean Reward:', np.mean(episode_reward)
+        print 'Mean Reward:', np.mean(episode_rewards)

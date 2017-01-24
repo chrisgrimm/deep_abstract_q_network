@@ -68,6 +68,7 @@ class DQN_Agent(interfaces.LearningAgent):
         self.epsilon = 1.0
         self.epsilon_min = 0.1
         self.epsilon_steps = 1000000
+        self.epsilon_delta = (self.epsilon - self.epsilon_min)/self.epsilon_steps
         self.action_ticker = 1
 
         self.num_actions = num_actions
@@ -76,7 +77,7 @@ class DQN_Agent(interfaces.LearningAgent):
         self.sess.run(tf.initialize_all_variables())
 
     def update_q_values(self):
-        S1, A, R, S2, T  = self.replay_buffer.sample(self.batch_size)
+        S1, A, R, S2, T = self.replay_buffer.sample(self.batch_size)
         Aonehot = np.zeros((self.batch_size, self.num_actions))
         Aonehot[range(len(A)), A] = 1
 
@@ -96,6 +97,8 @@ class DQN_Agent(interfaces.LearningAgent):
                 action = np.random.choice(environment.get_actions_for_state(state))
             else:
                 action = self.get_action(state)
+            self.epsilon = max(self.epsilon_min, self.epsilon - self.epsilon_delta)
+
             state, action, reward, next_state, is_terminal = environment.perform_action(action)
             total_reward += reward
             self.replay_buffer.append(state[:,:,-1], action, reward, next_state[:,:,-1], is_terminal)
@@ -108,7 +111,7 @@ class DQN_Agent(interfaces.LearningAgent):
         return episode_steps, total_reward
 
     def get_action(self, state):
-        [q_values] = self.sess.run([self.q_network], feed_dict={self.inp_frames: [state / 255.0]})
+        [q_values] = self.sess.run([self.q_network], feed_dict={self.inp_frames: [state]})
         return np.argmax(q_values[0])
 
 
