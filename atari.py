@@ -3,6 +3,7 @@ import interfaces
 import numpy as np
 import cv2
 import datetime
+import copy
 
 class AtariEnvironment(interfaces.Environment):
 
@@ -16,10 +17,11 @@ class AtariEnvironment(interfaces.Environment):
         self.screen_width = w
         self.screen_height = h
         self.last_two_frames = [np.zeros((84, 84), dtype=np.uint8), np.zeros((84, 84), dtype=np.uint8)]
-        self.frame_history = np.zeros((84, 84, 4), dtype=np.uint8)
+        self.frame_history = [np.zeros((84, 84, 4), dtype=np.uint8) for i in range(0, 4)]
         atari_actions = self.ale.getMinimalActionSet()
         self.atari_to_onehot = dict(zip(atari_actions, range(len(atari_actions))))
         self.onehot_to_atari = dict(zip(range(len(atari_actions)), atari_actions))
+        self.screen_image = np.zeros(self.screen_height * self.screen_width, dtype=np.uint8)
 
         self.use_gui = True
         self.original_frame = np.zeros((h, w, 3), dtype=np.uint8)
@@ -27,8 +29,8 @@ class AtariEnvironment(interfaces.Environment):
         self.last_refresh = datetime.datetime.now()
 
     def _get_frame(self):
-        image = np.zeros(self.screen_height*self.screen_width, dtype=np.uint8)
-        self.ale.getScreenGrayscale(image)
+        self.ale.getScreenGrayscale(self.screen_image)
+        image = self.screen_image.reshape([self.screen_height, self.screen_width, 1])
         image = image.reshape([self.screen_height, self.screen_width, 1])
         self.original_frame = image
         image = cv2.resize(image, (84, 84))
@@ -49,14 +51,14 @@ class AtariEnvironment(interfaces.Environment):
         if self.use_gui:
             self.refresh_gui()
 
-        self.frame_history[:, :, :-1] = self.frame_history[:, :, 1:]
-        self.frame_history[:, :, -1] = np.max(self.last_two_frames, axis=0)
+        self.frame_history[:-1] = self.frame_history[1:]
+        self.frame_history[-1] = np.max(self.last_two_frames, axis=0)
         next_state = self.get_current_state()
         is_terminal = self.is_current_state_terminal()
         return state, onehot_index_action, reward, next_state, is_terminal
 
     def get_current_state(self):
-        return np.copy(self.frame_history)
+        return copy.copy(self.frame_history)
 
 
     def get_actions_for_state(self, state):
@@ -64,7 +66,7 @@ class AtariEnvironment(interfaces.Environment):
 
     def reset_environment(self):
         self.ale.reset_game()
-        self.frame_history[:, :, -1] = self._get_frame()
+        self.frame_history[-1] = self._get_frame()
 
     def is_current_state_terminal(self):
         return self.ale.game_over()

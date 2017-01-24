@@ -101,7 +101,7 @@ class DQN_Agent(interfaces.LearningAgent):
 
             state, action, reward, next_state, is_terminal = environment.perform_action(action)
             total_reward += reward
-            self.replay_buffer.append(state[:,:,-1], action, reward, next_state[:,:,-1], is_terminal)
+            self.replay_buffer.append(state[-1], action, reward, next_state[-1], is_terminal)
             if self.replay_buffer.size() > 50000 and self.action_ticker % 4 == 0:
                 loss = self.update_q_values()
             if self.action_ticker % (4*10000) == 0:
@@ -111,7 +111,8 @@ class DQN_Agent(interfaces.LearningAgent):
         return episode_steps, total_reward
 
     def get_action(self, state):
-        [q_values] = self.sess.run([self.q_network], feed_dict={self.inp_frames: [state]})
+        state_input = np.transpose(state, [1, 2, 0])
+        [q_values] = self.sess.run([self.q_network], feed_dict={self.inp_frames: [state_input]})
         return np.argmax(q_values[0])
 
 
