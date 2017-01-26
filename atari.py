@@ -8,7 +8,7 @@ import pygame
 
 class AtariEnvironment(interfaces.Environment):
 
-    def __init__(self, atari_rom, frame_skip=4, noop_max=30, random_seed=123):
+    def __init__(self, atari_rom, frame_skip=4, noop_max=30, terminate_on_end_life=False, random_seed=123):
         self.ale = ALEInterface()
         self.ale.setInt('random_seed', random_seed)
         self.ale.setInt('frame_skip', 1)
@@ -16,6 +16,10 @@ class AtariEnvironment(interfaces.Environment):
         self.ale.loadROM(atari_rom)
         self.frame_skip = frame_skip
         self.noop_max = noop_max
+        self.terminate_on_end_life = terminate_on_end_life
+        self.current_lives = self.ale.lives()
+        self.is_terminal = False
+
         w, h = self.ale.getScreenDims()
         self.screen_width = w
         self.screen_height = h
@@ -52,9 +56,8 @@ class AtariEnvironment(interfaces.Environment):
         self.frame_history[:-1] = self.frame_history[1:]
         self.frame_history[-1] = np.max(self.last_two_frames, axis=0)
         next_state = self.get_current_state()
-        is_terminal = self.is_current_state_terminal()
 
-        return state, onehot_index_action, reward, next_state, is_terminal
+        return state, onehot_index_action, reward, next_state, self.is_terminal
 
     def _act(self, ale_action, repeat):
         reward = 0
@@ -63,17 +66,32 @@ class AtariEnvironment(interfaces.Environment):
             if i >= repeat - 2:
                 self.last_two_frames = [self.last_two_frames[1], self._get_frame()]
 
+        self.is_terminal = self.ale.game_over()
+
+        # terminate the episode if current_lives has changed
+        lives = self.ale.lives()
+        if self.current_lives != lives:
+            self.current_lives = lives
+            if self.terminate_on_end_life:
+                self.is_terminal = True
+
         return reward
 
     def get_current_state(self):
         return copy.copy(self.frame_history)
 
-
     def get_actions_for_state(self, state):
         return [self.atari_to_onehot[a] for a in self.ale.getMinimalActionSet()]
 
     def reset_environment(self):
-        self.ale.reset_game()
+        if self.terminate_on_end_life:
+            assert self.current_lives >= 0
+            if self.current_lives == 0:
+                self.ale.reset_game()
+        else:
+            self.ale.reset_game()
+
+        self.current_lives = self.ale.lives()
 
         if self.noop_max > 0:
             num_noops = np.random.randint(self.noop_max + 1)
@@ -83,7 +101,7 @@ class AtariEnvironment(interfaces.Environment):
         self.frame_history[-1] = np.max(self.last_two_frames, axis=0)
 
     def is_current_state_terminal(self):
-        return self.ale.game_over()
+        return self.is_terminal
 
     def refresh_gui(self):
         current_time = datetime.datetime.now()

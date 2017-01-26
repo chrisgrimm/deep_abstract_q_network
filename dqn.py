@@ -52,7 +52,7 @@ def verify_copy_op():
     return weights_equal * bias_equal
 
 class DQN_Agent(interfaces.LearningAgent):
-    def __init__(self, num_actions, gamma=0.99, learning_rate=0.00005, frame_size=84):
+    def __init__(self, num_actions, gamma=0.99, learning_rate=0.00005, frame_size=84, replay_start_size=50000):
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         self.sess = tf.Session(config=config)
@@ -82,7 +82,9 @@ class DQN_Agent(interfaces.LearningAgent):
         gradients = optimizer.compute_gradients(self.loss, var_list=nh.get_vars('network'))
         capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gradients]
         self.train_op = optimizer.apply_gradients(capped_gvs)
+
         self.replay_buffer = ReplayBuffer(1000000, 4)
+        self.replay_start_size = replay_start_size
         self.epsilon = 1.0
         self.epsilon_min = 0.1
         self.epsilon_steps = 1000000
@@ -106,7 +108,6 @@ class DQN_Agent(interfaces.LearningAgent):
                                              self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2})
         return loss
 
-    # TODO add in support for NO-OP frames at the beginning of each episode.
     def run_learning_episode(self, environment):
         environment.reset_environment()
         episode_steps = 0
@@ -122,7 +123,7 @@ class DQN_Agent(interfaces.LearningAgent):
             state, action, reward, next_state, is_terminal = environment.perform_action(action)
             total_reward += reward
             self.replay_buffer.append(state[-1], action, reward, next_state[-1], is_terminal)
-            if self.replay_buffer.size() > 50000 and self.action_ticker % 4 == 0:
+            if self.replay_buffer.size() > self.replay_start_size and self.action_ticker % 4 == 0:
                 loss = self.update_q_values()
             if self.action_ticker % (4*10000) == 0:
                 self.sess.run(self.copy_op)

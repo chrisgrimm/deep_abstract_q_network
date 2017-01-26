@@ -3,14 +3,15 @@ import numpy as np
 import datetime
 
 num_steps = 50000000
-game = './pong.bin'
+game = './roms/breakout.bin'
 
 
-env = atari.AtariEnvironment('./roms/pong.bin')
+env = atari.AtariEnvironment(game)
 agent = dqn.DQN_Agent(len(env.ale.getMinimalActionSet()), learning_rate=0.00005)
 
 
 def evaluate_agent_reward(steps, env, agent, epsilon):
+    env.terminate_on_end_life = False
     env.reset_environment()
     total_reward = 0
     episode_rewards = []
@@ -37,6 +38,7 @@ test_frames = 125000
 step_num = 0
 steps_until_test = test_interval
 while step_num < num_steps:
+    env.terminate_on_end_life = True
     start_time = datetime.datetime.now()
     episode_steps, episode_reward = agent.run_learning_episode(env)
     end_time = datetime.datetime.now()
