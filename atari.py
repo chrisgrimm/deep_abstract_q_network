@@ -44,13 +44,10 @@ class AtariEnvironment(interfaces.Environment):
         action = self.onehot_to_atari[onehot_index_action]
         state = self.get_current_state()
         reward = 0
-
-        self.ale.setInt("frame_skip", self.frame_skip-1)
-        reward += self.ale.act(action)
-        self.last_two_frames = [self.last_two_frames[1], self._get_frame()]
-        self.ale.setInt("frame_skip", 1)
-        reward += self.ale.act(action)
-        self.last_two_frames = [self.last_two_frames[1], self._get_frame()]
+        for i in range(self.frame_skip):
+            reward += self.ale.act(action)
+            if i >= self.frame_skip - 2:
+                self.last_two_frames = [self.last_two_frames[1], self._get_frame()]
 
         if self.use_gui:
             self.refresh_gui()
