@@ -8,13 +8,14 @@ import pygame
 
 class AtariEnvironment(interfaces.Environment):
 
-    def __init__(self, atari_rom, frame_skip=4, random_seed=123):
+    def __init__(self, atari_rom, frame_skip=4, noop_max=30, random_seed=123):
         self.ale = ALEInterface()
         self.ale.setInt('random_seed', random_seed)
         self.ale.setInt('frame_skip', 1)
         self.ale.setFloat('repeat_action_probability', 0.0)
         self.ale.loadROM(atari_rom)
         self.frame_skip = frame_skip
+        self.noop_max = noop_max
         w, h = self.ale.getScreenDims()
         self.screen_width = w
         self.screen_height = h
@@ -41,13 +42,9 @@ class AtariEnvironment(interfaces.Environment):
         return image
 
     def perform_action(self, onehot_index_action):
-        action = self.onehot_to_atari[onehot_index_action]
         state = self.get_current_state()
-        reward = 0
-        for i in range(self.frame_skip):
-            reward += self.ale.act(action)
-            if i >= self.frame_skip - 2:
-                self.last_two_frames = [self.last_two_frames[1], self._get_frame()]
+        action = self.onehot_to_atari[onehot_index_action]
+        reward = self._act(action, self.frame_skip)
 
         if self.use_gui:
             self.refresh_gui()
@@ -56,7 +53,17 @@ class AtariEnvironment(interfaces.Environment):
         self.frame_history[-1] = np.max(self.last_two_frames, axis=0)
         next_state = self.get_current_state()
         is_terminal = self.is_current_state_terminal()
+
         return state, onehot_index_action, reward, next_state, is_terminal
+
+    def _act(self, ale_action, repeat):
+        reward = 0
+        for i in range(repeat):
+            reward += self.ale.act(ale_action)
+            if i >= repeat - 2:
+                self.last_two_frames = [self.last_two_frames[1], self._get_frame()]
+
+        return reward
 
     def get_current_state(self):
         return copy.copy(self.frame_history)
@@ -67,7 +74,13 @@ class AtariEnvironment(interfaces.Environment):
 
     def reset_environment(self):
         self.ale.reset_game()
-        self.frame_history[-1] = self._get_frame()
+
+        if self.noop_max > 0:
+            num_noops = np.random.randint(self.noop_max + 1)
+            self._act(0, num_noops)
+
+        self.frame_history[:-1] = self.frame_history[1:]
+        self.frame_history[-1] = np.max(self.last_two_frames, axis=0)
 
     def is_current_state_terminal(self):
         return self.ale.game_over()
