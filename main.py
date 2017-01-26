@@ -7,7 +7,7 @@ game = './pong.bin'
 
 
 env = atari.AtariEnvironment('./roms/pong.bin')
-agent = dqn.DQN_Agent(len(env.ale.getMinimalActionSet()))
+agent = dqn.DQN_Agent(len(env.ale.getMinimalActionSet()), learning_rate=0.00005)
 
 
 def evaluate_agent_reward(steps, env, agent, epsilon):

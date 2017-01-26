@@ -12,6 +12,7 @@ class AtariEnvironment(interfaces.Environment):
         self.ale = ALEInterface()
         self.ale.setInt('random_seed', random_seed)
         self.ale.setInt('frame_skip', 1)
+        self.ale.setFloat('repeat_action_probability', 0.0)
         self.ale.loadROM(atari_rom)
         self.frame_skip = frame_skip
         w, h = self.ale.getScreenDims()
