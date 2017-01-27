@@ -109,6 +109,10 @@ class AtariEnvironment(interfaces.Environment):
             self.last_refresh = current_time
 
             gui_image = np.tile(np.transpose(self.original_frame, axes=(1, 0, 2)), [1, 1, 3])
+            # gui_image = np.zeros((self.screen_width, self.screen_height, 3), dtype=np.uint8)
+            # channel = np.random.randint(3)
+            # gui_image[:,:,channel] = np.transpose(self.original_frame, axes=(1, 0, 2))[:,:,0]
+
             pygame.surfarray.blit_array(self.gui_screen, gui_image)
             pygame.display.update()
 
