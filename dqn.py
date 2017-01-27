@@ -122,11 +122,14 @@ class DQNAgent(interfaces.LearningAgent):
                                              self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2})
         return loss
 
-    def run_learning_episode(self, environment):
+    def run_learning_episode(self, environment, max_episode_steps=10000):
         environment.reset_environment()
         episode_steps = 0
         total_reward = 0
-        while not environment.is_current_state_terminal():
+        for steps in range(max_episode_steps):
+            if environment.is_current_state_terminal():
+                break
+
             state = environment.get_current_state()
             if np.random.uniform(0, 1) < self.epsilon:
                 action = np.random.choice(environment.get_actions_for_state(state))

@@ -57,7 +57,7 @@ class DoubleDQNAgent(dqn.DQNAgent):
             masked_sp_frames = float_sp_frames * tf.tile(tf.reshape(self.inp_sp_mask, [-1, 1, 1, 4]), [1, frame_size, frame_size, 1])
             self.q_target = hook_double_dqn(masked_sp_frames, num_actions)
 
-        self.maxQ = tf.gather(self.q_target, tf.argmax(self.q_network, axis=1))
+        self.maxQ = tf.gather(tf.transpose(self.q_target, [1, 0]), tf.argmax(self.q_network, axis=1))
         self.r = tf.sign(self.inp_reward)
         use_backup = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32)
         self.y = self.r + use_backup * gamma * self.maxQ

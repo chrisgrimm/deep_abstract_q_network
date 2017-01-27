@@ -8,7 +8,8 @@ import pygame
 
 class AtariEnvironment(interfaces.Environment):
 
-    def __init__(self, atari_rom, frame_skip=4, noop_max=30, terminate_on_end_life=False, random_seed=123):
+    def __init__(self, atari_rom, frame_skip=4, noop_max=30, terminate_on_end_life=False, random_seed=123,
+                 frame_history_length=4):
         self.ale = ALEInterface()
         self.ale.setInt('random_seed', random_seed)
         self.ale.setInt('frame_skip', 1)
@@ -23,8 +24,10 @@ class AtariEnvironment(interfaces.Environment):
         w, h = self.ale.getScreenDims()
         self.screen_width = w
         self.screen_height = h
-        self.last_two_frames = [np.zeros((84, 84), dtype=np.uint8), np.zeros((84, 84), dtype=np.uint8)]
-        self.frame_history = [np.zeros((84, 84, 4), dtype=np.uint8) for i in range(0, 4)]
+        self.zero_last_frames = [np.zeros((84, 84), dtype=np.uint8), np.zeros((84, 84), dtype=np.uint8)]
+        self.last_two_frames = copy.copy(self.zero_last_frames)
+        self.zero_history_frames = [np.zeros((84, 84), dtype=np.uint8) for i in range(0, frame_history_length)]
+        self.frame_history = copy.copy(self.zero_history_frames)
         atari_actions = self.ale.getMinimalActionSet()
         self.atari_to_onehot = dict(zip(atari_actions, range(len(atari_actions))))
         self.onehot_to_atari = dict(zip(range(len(atari_actions)), atari_actions))
@@ -84,6 +87,8 @@ class AtariEnvironment(interfaces.Environment):
         return [self.atari_to_onehot[a] for a in self.ale.getMinimalActionSet()]
 
     def reset_environment(self):
+        self.last_two_frames = [self.zero_history_frames[0], self._get_frame()]
+
         if self.terminate_on_end_life:
             assert self.current_lives >= 0
             if self.current_lives == 0:
@@ -97,7 +102,7 @@ class AtariEnvironment(interfaces.Environment):
             num_noops = np.random.randint(self.noop_max + 1)
             self._act(0, num_noops)
 
-        self.frame_history[:-1] = self.frame_history[1:]
+        self.frame_history = copy.copy(self.zero_history_frames)
         self.frame_history[-1] = np.max(self.last_two_frames, axis=0)
 
     def is_current_state_terminal(self):
