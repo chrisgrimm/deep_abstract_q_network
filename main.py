@@ -1,6 +1,7 @@
 import atari, dqn
 import numpy as np
 import datetime
+import tqdm
 
 num_steps = 50000000
 game = './roms/breakout.bin'
@@ -15,7 +16,7 @@ def evaluate_agent_reward(steps, env, agent, epsilon):
     env.reset_environment()
     total_reward = 0
     episode_rewards = []
-    for i in range(steps):
+    for i in tqdm.tqdm(range(steps)):
         if env.is_current_state_terminal():
             episode_rewards.append(total_reward)
             total_reward = 0

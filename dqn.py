@@ -73,15 +73,14 @@ class DQN_Agent(interfaces.LearningAgent):
             self.float_sp_frames = tf.image.convert_image_dtype(self.inp_sp_frames, tf.float32)
             self.q_target = hook_dqn(self.float_sp_frames * tf.tile(tf.reshape(self.inp_sp_mask, [-1, 1, 1, 4]), [1, 84, 84, 1]), num_actions)
         self.copy_op = make_copy_op('network', 'target')
-        maxQ = tf.reduce_max(self.q_target, reduction_indices=1)
-        r = tf.sign(self.inp_reward)
+        self.maxQ = tf.reduce_max(self.q_target, reduction_indices=1)
+        self.r = tf.sign(self.inp_reward)
         use_backup = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32)
-        y = r + use_backup * gamma * maxQ
-        self.loss = tf.reduce_sum(tf.square(tf.reduce_sum(self.inp_actions * self.q_network, reduction_indices=1) - y))
-        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, epsilon=0.1)
-        gradients = optimizer.compute_gradients(self.loss, var_list=nh.get_vars('network'))
-        capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gradients]
-        self.train_op = optimizer.apply_gradients(capped_gvs)
+        self.y = self.r + use_backup * gamma * self.maxQ
+        self.error = tf.clip_by_value(tf.reduce_sum(self.inp_actions * self.q_network, reduction_indices=1) - self.y, -1.0, 1.0)
+        self.loss = tf.reduce_sum(tf.square(self.error))
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, epsilon=0.0001)
+        self.train_op = optimizer.minimize(self.loss, var_list=nh.get_vars('network'))
 
         self.replay_buffer = ReplayBuffer(1000000, 4)
         self.replay_start_size = replay_start_size
@@ -102,7 +101,7 @@ class DQN_Agent(interfaces.LearningAgent):
         Aonehot = np.zeros((self.batch_size, self.num_actions), dtype=np.float32)
         Aonehot[range(len(A)), A] = 1
 
-        [_, loss] = self.sess.run([self.train_op, self.loss],
+        [_, loss, q_network, maxQ, r, y, error] = self.sess.run([self.train_op, self.loss, self.q_network, self.maxQ, self.r, self.y, self.error],
                                   feed_dict={self.inp_frames: S1, self.inp_actions: Aonehot,
                                              self.inp_sp_frames: S2, self.inp_reward: R,
                                              self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2})
