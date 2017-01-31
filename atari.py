@@ -33,7 +33,7 @@ class AtariEnvironment(interfaces.Environment):
         self.onehot_to_atari = dict(zip(range(len(atari_actions)), atari_actions))
         self.screen_image = np.zeros(self.screen_height * self.screen_width, dtype=np.uint8)
 
-        self.use_gui = True
+        self.use_gui = False
         self.original_frame = np.zeros((h, w), dtype=np.uint8)
         self.refresh_time = datetime.timedelta(milliseconds=1000 / 60)
         self.last_refresh = datetime.datetime.now()
