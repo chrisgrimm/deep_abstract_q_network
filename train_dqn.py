@@ -8,7 +8,7 @@ import double_dqn
 import atari
 import os.path
 
-game = 'breakout'
+game = 'freeway'
 game_dir = './roms'
 results_dir = './results'
 
