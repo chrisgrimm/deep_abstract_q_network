@@ -109,6 +109,8 @@ class DQNAgent(interfaces.LearningAgent):
         self.batch_size = batch_size
 
         self.sess.run(tf.initialize_all_variables())
+        self.saver = tf.train.Saver(var_list=nh.get_vars('network'))
+
         self.sess.run(self.copy_op)
 
     def update_q_values(self):
