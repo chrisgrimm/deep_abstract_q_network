@@ -49,8 +49,8 @@ results_file = open(results_fn, 'w')
 
 # create Atari environment
 env = atari.AtariEnvironment(game_dir + '/' + game + '.bin')
-agent = dqn.DQNAgent(len(env.ale.getMinimalActionSet()), epsilon_end=training_epsilon)
-
+#agent = double_dqn.DoubleDQNAgent(len(env.ale.getMinimalActionSet()), epsilon_end=training_epsilon)
+agent = dqn.DQNAgent(len(env.ale.getMinimalActionSet()))
 step_num = 0
 steps_until_test = test_interval
 best_eval_reward = - float('inf')
