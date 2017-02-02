@@ -28,11 +28,14 @@ class ReplayMemory(object):
         # these cases aren't exclusive if this isn't true.
         # assert self.capacity > self.frame_history + 1
         if start < 0:
-            return np.concatenate((array[start:], array[:end]), axis=0)
+            window = np.concatenate((array[start:], array[:end]), axis=0)
         elif end > self.capacity:
-            return np.concatenate((array[start:], array[:end-self.capacity]), axis=0)
+            window = np.concatenate((array[start:], array[:end-self.capacity]), axis=0)
         else:
-            return array[start:end]
+            window = array[start:end]
+
+        window.flags.writeable = False
+        return window
 
     def get_sample(self, index):
         start_frames = index - (self.frame_history - 1)
@@ -51,7 +54,11 @@ class ReplayMemory(object):
         S0 = np.transpose(frames[:-1], [1, 2, 0])
         S1 = np.transpose(frames[1:], [1, 2, 0])
 
-        return S0, self.action[index], self.reward[index], S1, self.terminated[index], mask, mask2
+        a = self.action[index]
+        r = self.reward[index]
+        t = self.terminated[index]
+
+        return S0, a, r, S1, t, mask, mask2
 
     def sample(self, num_samples):
         if not self.filled:
@@ -69,7 +76,7 @@ class ReplayMemory(object):
         M1 = []
         M2 = []
 
-        for i, sample_i in enumerate(idx):
+        for sample_i in idx:
             s0, a, r, s1, t, mask, mask2 = self.get_sample(sample_i)
             S0.append(s0)
             A.append(a)

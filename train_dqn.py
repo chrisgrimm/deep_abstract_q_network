@@ -10,14 +10,14 @@ import os.path
 
 game = 'breakout'
 game_dir = './roms'
-results_dir = './results'
+results_dir = './results/dqn/breakout_2'
 
 num_steps = 50000000
 test_interval = 250000
 test_frames = 125000
 
-training_epsilon = 0.01
-test_epsilon = 0.001
+training_epsilon = 0.1  # 0.1, 0.01
+test_epsilon = 0.05  # 0.05, 0.001
 
 
 def evaluate_agent_reward(steps, env, agent, epsilon):
@@ -44,12 +44,12 @@ def evaluate_agent_reward(steps, env, agent, epsilon):
 
 
 # open results file
-results_fn = '%s/%s_results' % (results_dir, game)
+results_fn = '%s/%s_results.txt' % (results_dir, game)
 results_file = open(results_fn, 'w')
 
 # create Atari environment
 env = atari.AtariEnvironment(game_dir + '/' + game + '.bin')
-agent = double_dqn.DoubleDQNAgent(len(env.ale.getMinimalActionSet()), epsilon_end=training_epsilon)
+agent = dqn.DQNAgent(len(env.ale.getMinimalActionSet()), epsilon_end=training_epsilon)
 
 step_num = 0
 steps_until_test = test_interval
@@ -75,3 +75,4 @@ while step_num < num_steps:
 
         print 'Mean Reward:', mean_reward, 'Best:', best_eval_reward
         results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
+        results_file.flush()

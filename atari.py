@@ -90,6 +90,7 @@ class AtariEnvironment(interfaces.Environment):
         self.last_two_frames = [self.zero_history_frames[0], self._get_frame()]
 
         if self.terminate_on_end_life:
+            self.current_lives = self.ale.lives()
             assert self.current_lives >= 0
             if self.current_lives == 0:
                 self.ale.reset_game()

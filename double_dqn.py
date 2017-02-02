@@ -48,25 +48,29 @@ class DoubleDQNAgent(dqn.DQNAgent):
         self.inp_mask = tf.placeholder(tf.float32, [None, 4])
         self.inp_sp_mask = tf.placeholder(tf.float32, [None, 4])
         self.gamma = gamma
-        with tf.variable_scope('network'):
+        with tf.variable_scope('online'):
             float_frames = tf.image.convert_image_dtype(self.inp_frames, tf.float32)
             masked_frames = float_frames * tf.tile(tf.reshape(self.inp_mask, [-1, 1, 1, 4]), [1, frame_size, frame_size, 1])
-            self.q_network = hook_double_dqn(masked_frames, num_actions)
+            self.q_online = hook_double_dqn(masked_frames, num_actions)
+        with tf.variable_scope('online', reuse=True):
+            float_frames = tf.image.convert_image_dtype(self.inp_sp_frames, tf.float32)
+            masked_frames = float_frames * tf.tile(tf.reshape(self.inp_sp_mask, [-1, 1, 1, 4]), [1, frame_size, frame_size, 1])
+            self.q_online_prime = hook_double_dqn(masked_frames, num_actions)
         with tf.variable_scope('target'):
             float_sp_frames = tf.image.convert_image_dtype(self.inp_sp_frames, tf.float32)
             masked_sp_frames = float_sp_frames * tf.tile(tf.reshape(self.inp_sp_mask, [-1, 1, 1, 4]), [1, frame_size, frame_size, 1])
             self.q_target = hook_double_dqn(masked_sp_frames, num_actions)
 
-        self.maxQ = tf.gather(tf.transpose(self.q_target, [1, 0]), tf.argmax(self.q_network, axis=1))
+        self.maxQ = tf.gather_nd(self.q_target, tf.transpose([tf.range(0, 32, dtype=tf.int32), tf.cast(tf.argmax(self.q_online_prime, axis=1), tf.int32)], [1, 0]))
         self.r = tf.sign(self.inp_reward)
         use_backup = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32)
         self.y = self.r + use_backup * gamma * self.maxQ
-        self.error = tf.clip_by_value(tf.reduce_sum(self.inp_actions * self.q_network, reduction_indices=1) - self.y, -1.0, 1.0)
+        self.error = tf.clip_by_value(tf.reduce_sum(self.inp_actions * self.q_online, reduction_indices=1) - self.y, -1.0, 1.0)
         self.loss = 0.5 * tf.reduce_sum(tf.square(self.error))
         optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, centered=True)
-        self.train_op = optimizer.minimize(self.loss, var_list=nh.get_vars('network'))
-        self.copy_op = dqn.make_copy_op('network', 'target')
-        self.saver = tf.train.Saver(var_list=nh.get_vars('network'))
+        self.train_op = optimizer.minimize(self.loss, var_list=nh.get_vars('online'))
+        self.copy_op = dqn.make_copy_op('online', 'target')
+        self.saver = tf.train.Saver(var_list=nh.get_vars('online'))
 
         self.replay_buffer = ReplayMemory(replay_memory_size, frame_history)
         self.frame_history = frame_history

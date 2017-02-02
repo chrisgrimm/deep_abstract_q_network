@@ -45,20 +45,20 @@ def make_copy_op(source_scope, dest_scope):
 
 
 def verify_copy_op():
-    with tf.variable_scope('network/fc1/full_conv_vars', reuse=True):
-        w_network = tf.get_variable('w')
-        b_network = tf.get_variable('b')
+    with tf.variable_scope('online/fc1/full_conv_vars', reuse=True):
+        w_online = tf.get_variable('w')
+        b_online = tf.get_variable('b')
     with tf.variable_scope('target/fc1/full_conv_vars', reuse=True):
         w_target = tf.get_variable('w')
         b_target = tf.get_variable('b')
 
-    weights_equal = tf.reduce_prod(tf.cast(tf.equal(w_network, w_target), tf.float32))
-    bias_equal = tf.reduce_prod(tf.cast(tf.equal(b_network, b_target), tf.float32))
+    weights_equal = tf.reduce_prod(tf.cast(tf.equal(w_online, w_target), tf.float32))
+    bias_equal = tf.reduce_prod(tf.cast(tf.equal(b_online, b_target), tf.float32))
     return weights_equal * bias_equal
 
 
 class DQNAgent(interfaces.LearningAgent):
-    def __init__(self, num_actions, gamma=0.99, learning_rate=0.00005, frame_size=84, replay_start_size=50000,
+    def __init__(self, num_actions, gamma=0.99, learning_rate=0.00025, frame_size=84, replay_start_size=50000,
                  epsilon_start=1.0, epsilon_end=0.1, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=10000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32):
@@ -74,10 +74,10 @@ class DQNAgent(interfaces.LearningAgent):
         self.inp_mask = tf.placeholder(tf.float32, [None, 4])
         self.inp_sp_mask = tf.placeholder(tf.float32, [None, 4])
         self.gamma = gamma
-        with tf.variable_scope('network'):
+        with tf.variable_scope('online'):
             float_frames = tf.image.convert_image_dtype(self.inp_frames, tf.float32)
             masked_frames = float_frames * tf.tile(tf.reshape(self.inp_mask, [-1, 1, 1, 4]), [1, frame_size, frame_size, 1])
-            self.q_network = hook_dqn(masked_frames, num_actions)
+            self.q_online = hook_dqn(masked_frames, num_actions)
         with tf.variable_scope('target'):
             float_sp_frames = tf.image.convert_image_dtype(self.inp_sp_frames, tf.float32)
             masked_sp_frames = float_sp_frames * tf.tile(tf.reshape(self.inp_sp_mask, [-1, 1, 1, 4]), [1, frame_size, frame_size, 1])
@@ -87,12 +87,12 @@ class DQNAgent(interfaces.LearningAgent):
         self.r = tf.sign(self.inp_reward)
         use_backup = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32)
         self.y = self.r + use_backup * gamma * self.maxQ
-        self.error = tf.clip_by_value(tf.reduce_sum(self.inp_actions * self.q_network, reduction_indices=1) - self.y, -1.0, 1.0)
-        self.loss = tf.reduce_sum(tf.square(self.error))
-        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95)
-        self.train_op = optimizer.minimize(self.loss, var_list=nh.get_vars('network'))
-        self.copy_op = make_copy_op('network', 'target')
-        self.saver = tf.train.Saver(var_list=nh.get_vars('network'))
+        self.error = tf.clip_by_value(tf.reduce_sum(self.inp_actions * self.q_online, reduction_indices=1) - self.y, -1.0, 1.0)
+        self.loss = 0.5 * tf.reduce_sum(tf.square(self.error))
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, centered=True, epsilon=0.01)
+        self.train_op = optimizer.minimize(self.loss, var_list=nh.get_vars('online'))
+        self.copy_op = make_copy_op('online', 'target')
+        self.saver = tf.train.Saver(var_list=nh.get_vars('online'))
 
         self.replay_buffer = ReplayMemory(replay_memory_size, frame_history)
         self.frame_history = frame_history
@@ -116,7 +116,7 @@ class DQNAgent(interfaces.LearningAgent):
         Aonehot = np.zeros((self.batch_size, self.num_actions), dtype=np.float32)
         Aonehot[range(len(A)), A] = 1
 
-        [_, loss, q_network, maxQ, q_target, r, y, error] = self.sess.run([self.train_op, self.loss, self.q_network, self.maxQ, self.q_target, self.r, self.y, self.error],
+        [_, loss, q_online, maxQ, q_target, r, y, error] = self.sess.run([self.train_op, self.loss, self.q_online, self.maxQ, self.q_target, self.r, self.y, self.error],
                                   feed_dict={self.inp_frames: S1, self.inp_actions: Aonehot,
                                              self.inp_sp_frames: S2, self.inp_reward: R,
                                              self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2})
@@ -140,9 +140,9 @@ class DQNAgent(interfaces.LearningAgent):
             state, action, reward, next_state, is_terminal = environment.perform_action(action)
             total_reward += reward
             self.replay_buffer.append(state[-1], action, reward, next_state[-1], is_terminal)
-            if self.replay_buffer.size() > self.replay_start_size and self.action_ticker % self.update_freq == 0:
+            if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
                 loss = self.update_q_values()
-            if (self.action_ticker - self.replay_start_size) % (self.update_freq * self.target_copy_freq) == 0:
+            if (self.action_ticker - self.replay_start_size) % self.target_copy_freq == 0:
                 self.sess.run(self.copy_op)
             self.action_ticker += 1
             episode_steps += 1
@@ -150,7 +150,7 @@ class DQNAgent(interfaces.LearningAgent):
 
     def get_action(self, state):
         state_input = np.transpose(state, [1, 2, 0])
-        [q_values] = self.sess.run([self.q_network],
+        [q_values] = self.sess.run([self.q_online],
                                    feed_dict={self.inp_frames: [state_input],
                                               self.inp_mask: np.ones((1, self.frame_history), dtype=np.float32)})
         return np.argmax(q_values[0])
