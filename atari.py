@@ -9,11 +9,12 @@ import pygame
 class AtariEnvironment(interfaces.Environment):
 
     def __init__(self, atari_rom, frame_skip=4, noop_max=30, terminate_on_end_life=False, random_seed=123,
-                 frame_history_length=4, use_gui=True):
+                 frame_history_length=4, use_gui=True, max_num_frames=10000):
         self.ale = ALEInterface()
         self.ale.setInt('random_seed', random_seed)
         self.ale.setInt('frame_skip', 1)
         self.ale.setFloat('repeat_action_probability', 0.0)
+        self.ale.setInt('max_num_frames_per_episode', max_num_frames)
         self.ale.loadROM(atari_rom)
         self.frame_skip = frame_skip
         self.noop_max = noop_max
@@ -90,9 +91,7 @@ class AtariEnvironment(interfaces.Environment):
         self.last_two_frames = [self.zero_history_frames[0], self._get_frame()]
 
         if self.terminate_on_end_life:
-            self.current_lives = self.ale.lives()
-            assert self.current_lives >= 0
-            if self.current_lives == 0:
+            if self.ale.game_over():
                 self.ale.reset_game()
         else:
             self.ale.reset_game()

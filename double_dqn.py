@@ -35,7 +35,7 @@ class DoubleDQNAgent(dqn.DQNAgent):
     def __init__(self, num_actions, gamma=0.99, learning_rate=0.00025, frame_size=84, replay_start_size=50000,
                  epsilon_start=1.0, epsilon_end=0.1, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
-                 frame_history=4, batch_size=32):
+                 frame_history=4, batch_size=32, error_clip=1):
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         self.sess = tf.Session(config=config)
@@ -65,8 +65,10 @@ class DoubleDQNAgent(dqn.DQNAgent):
         self.r = tf.sign(self.inp_reward)
         use_backup = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32)
         self.y = self.r + use_backup * gamma * self.maxQ
-        self.error = tf.clip_by_value(tf.reduce_sum(self.inp_actions * self.q_online, reduction_indices=1) - self.y, -1.0, 1.0)
-        self.loss = 0.5 * tf.reduce_sum(tf.square(self.error))
+        self.delta = tf.reduce_sum(self.inp_actions * self.q_online, reduction_indices=1) - self.y
+        self.error = tf.select(tf.abs(self.delta) < error_clip, 0.5 * tf.square(self.delta), error_clip * tf.abs(self.delta))
+        self.loss = tf.reduce_sum(self.error)
+        self.g = tf.gradients(self.loss, self.q_online)
         optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, centered=True)
         self.train_op = optimizer.minimize(self.loss, var_list=nh.get_vars('online'))
         self.copy_op = dqn.make_copy_op('online', 'target')
