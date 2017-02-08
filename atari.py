@@ -9,7 +9,7 @@ import pygame
 class AtariEnvironment(interfaces.Environment):
 
     def __init__(self, atari_rom, frame_skip=4, noop_max=30, terminate_on_end_life=False, random_seed=123,
-                 frame_history_length=4, use_gui=True, max_num_frames=10000):
+                 frame_history_length=4, use_gui=True, max_num_frames=500000):
         self.ale = ALEInterface()
         self.ale.setInt('random_seed', random_seed)
         self.ale.setInt('frame_skip', 1)

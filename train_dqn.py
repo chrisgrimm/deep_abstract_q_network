@@ -3,21 +3,25 @@ import datetime
 import numpy as np
 import tqdm
 
-import dqn
-import double_dqn
 import atari
-import os.path
-
-game = 'breakout'
-game_dir = './roms'
-results_dir = './results/double_dqn/breakout'
+import dq_learner
+import atari_dqn
 
 num_steps = 50000000
 test_interval = 250000
 test_frames = 125000
 
-training_epsilon = 0.01  # 0.1, 0.01
-test_epsilon = 0.001  # 0.05, 0.001
+game = 'breakout'
+game_dir = './roms'
+results_dir = './results/dqn/breakout_3'
+
+# open results file
+results_fn = '%s/%s_results.txt' % (results_dir, game)
+results_file = open(results_fn, 'w')
+
+# create Atari environment
+env = atari.AtariEnvironment(game_dir + '/' + game + '.bin')
+num_actions = len(env.ale.getMinimalActionSet())
 
 
 def evaluate_agent_reward(steps, env, agent, epsilon):
@@ -43,36 +47,55 @@ def evaluate_agent_reward(steps, env, agent, epsilon):
     return episode_rewards
 
 
-# open results file
-results_fn = '%s/%s_results.txt' % (results_dir, game)
-results_file = open(results_fn, 'w')
+def train(agent, env, test_epsilon):
+    step_num = 0
+    steps_until_test = test_interval
+    best_eval_reward = - float('inf')
+    while step_num < num_steps:
+        env.reset_environment()
+        env.terminate_on_end_life = True
+        start_time = datetime.datetime.now()
+        episode_steps, episode_reward = agent.run_learning_episode(env)
+        end_time = datetime.datetime.now()
+        step_num += episode_steps
+        print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
+        end_time - start_time).total_seconds(), '\tEps:', agent.epsilon
 
-# create Atari environment
-env = atari.AtariEnvironment(game_dir + '/' + game + '.bin')
-agent = double_dqn.DoubleDQNAgent(len(env.ale.getMinimalActionSet()), epsilon_end=training_epsilon)
-# agent = dqn.DQNAgent(len(env.ale.getMinimalActionSet()))
-step_num = 0
-steps_until_test = test_interval
-best_eval_reward = - float('inf')
-while step_num < num_steps:
-    env.terminate_on_end_life = True
-    start_time = datetime.datetime.now()
-    episode_steps, episode_reward = agent.run_learning_episode(env)
-    end_time = datetime.datetime.now()
-    step_num += episode_steps
-    print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (end_time - start_time).total_seconds(), '\tEps:', agent.epsilon
+        steps_until_test -= episode_steps
+        if steps_until_test <= 0:
+            steps_until_test += test_interval
+            print 'Evaluating network...'
+            episode_rewards = evaluate_agent_reward(test_frames, env, agent, test_epsilon)
+            mean_reward = np.mean(episode_rewards)
 
-    steps_until_test -= episode_steps
-    if steps_until_test <= 0:
-        steps_until_test += test_interval
-        print 'Evaluating network...'
-        episode_rewards = evaluate_agent_reward(test_frames, env, agent, test_epsilon)
-        mean_reward = np.mean(episode_rewards)
+            if mean_reward > best_eval_reward:
+                best_eval_reward = mean_reward
+                agent.save_network('%s/%s_best_net.ckpt' % (results_dir, game))
 
-        if mean_reward > best_eval_reward:
-            best_eval_reward = mean_reward
-            agent.save_network('%s/%s_best_net.ckpt' % (results_dir, game))
+            print 'Mean Reward:', mean_reward, 'Best:', best_eval_reward
+            results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
+            results_file.flush()
 
-        print 'Mean Reward:', mean_reward, 'Best:', best_eval_reward
-        results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
-        results_file.flush()
+
+def train_dqn():
+    training_epsilon = 0.1
+    test_epsilon = 0.05
+
+    dqn = atari_dqn.AtariDQN(4, num_actions, shared_bias=False)
+    agent = dq_learner.DQLearner(dqn, num_actions, target_copy_freq=10000, epsilon_end=training_epsilon, double=False)
+
+    train(agent, env, test_epsilon)
+
+
+def train_double_dqn():
+    training_epsilon = 0.1
+    test_epsilon = 0.05
+
+    dqn = atari_dqn.AtariDQN(4, num_actions)
+    agent = dq_learner.DQLearner(dqn, num_actions, epsilon_end=training_epsilon)
+
+    train(agent, env, test_epsilon)
+
+
+train_dqn()
+# train_double_dqn()

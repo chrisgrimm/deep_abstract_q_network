@@ -26,3 +26,13 @@ class LearningAgent(object):
         raise NotImplemented
 
 
+class DQNInterface(object):
+
+    def get_input_shape(self):
+        raise NotImplemented
+
+    def get_input_dtype(self):
+        raise NotImplemented
+
+    def construct_q_network(self, input):
+        raise NotImplemented

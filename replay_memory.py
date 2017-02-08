@@ -2,17 +2,20 @@ import numpy as np
 
 class ReplayMemory(object):
 
-    def __init__(self, capacity, frame_history):
+    def __init__(self, input_shape, input_dtype, capacity, frame_history):
         self.t = 0
         self.filled = False
         self.capacity = capacity
         self.frame_history = frame_history
+        self.input_shape = input_shape
+        self.input_dtype = input_dtype
         # S1 A R S2
         # to grab SARSA(0) -> S(0) A(0) R(0) S(1) T(0)
-        self.screens = np.zeros((capacity, 84, 84), dtype=np.uint8)
+        self.screens = np.zeros([capacity] + list(self.input_shape), dtype=input_dtype)
         self.action = np.zeros(capacity, dtype=np.uint8)
         self.reward = np.zeros(capacity, dtype=np.float32)
         self.terminated = np.zeros(capacity, dtype=np.bool)
+        self.transposed_shape = range(1, len(self.input_shape)+1) + [0]
 
     def append(self, S1, A, R, S2, T):
         self.screens[self.t, :, :] = S1
@@ -51,8 +54,8 @@ class ReplayMemory(object):
                 break
         mask2 = np.concatenate((mask[1:], [1]))
 
-        S0 = np.transpose(frames[:-1], [1, 2, 0])
-        S1 = np.transpose(frames[1:], [1, 2, 0])
+        S0 = np.transpose(frames[:-1], self.transposed_shape)
+        S1 = np.transpose(frames[1:], self.transposed_shape)
 
         a = self.action[index]
         r = self.reward[index]
