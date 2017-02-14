@@ -44,7 +44,6 @@ class AtariEnvironment(interfaces.Environment):
     def _get_frame(self):
         self.ale.getScreenGrayscale(self.screen_image)
         image = self.screen_image.reshape([self.screen_height, self.screen_width, 1])
-        image = image.reshape([self.screen_height, self.screen_width, 1])
         self.original_frame = image
         image = cv2.resize(image, (84, 84))
         return image
@@ -72,12 +71,12 @@ class AtariEnvironment(interfaces.Environment):
 
         self.is_terminal = self.ale.game_over()
 
-        # terminate the episode if current_lives has changed
+        # terminate the episode if current_lives has decreased
         lives = self.ale.lives()
         if self.current_lives != lives:
-            self.current_lives = lives
-            if self.terminate_on_end_life:
+            if self.current_lives > lives and self.terminate_on_end_life:
                 self.is_terminal = True
+            self.current_lives = lives
 
         return reward
 

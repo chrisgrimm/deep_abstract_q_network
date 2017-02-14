@@ -6,22 +6,19 @@ import tqdm
 import atari
 import dq_learner
 import atari_dqn
+import coin_game
 
 num_steps = 50000000
 test_interval = 250000
 test_frames = 125000
 
-game = 'breakout'
+game = 'coin_game'
 game_dir = './roms'
-results_dir = './results/dqn/breakout_3'
+results_dir = './results/double_dqn/coin_game'
 
 # open results file
 results_fn = '%s/%s_results.txt' % (results_dir, game)
 results_file = open(results_fn, 'w')
-
-# create Atari environment
-env = atari.AtariEnvironment(game_dir + '/' + game + '.bin')
-num_actions = len(env.ale.getMinimalActionSet())
 
 
 def evaluate_agent_reward(steps, env, agent, epsilon):
@@ -77,7 +74,7 @@ def train(agent, env, test_epsilon):
             results_file.flush()
 
 
-def train_dqn():
+def train_dqn(env, num_actions):
     training_epsilon = 0.1
     test_epsilon = 0.05
 
@@ -87,15 +84,25 @@ def train_dqn():
     train(agent, env, test_epsilon)
 
 
-def train_double_dqn():
-    training_epsilon = 0.1
-    test_epsilon = 0.05
+def train_double_dqn(env, num_actions):
+    training_epsilon = 0.01
+    test_epsilon = 0.001
 
     dqn = atari_dqn.AtariDQN(4, num_actions)
     agent = dq_learner.DQLearner(dqn, num_actions, epsilon_end=training_epsilon)
 
     train(agent, env, test_epsilon)
 
+def setup_atari_env():
+    # create Atari environment
+    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin')
+    num_actions = len(env.ale.getMinimalActionSet())
+    return env, num_actions
 
-train_dqn()
-# train_double_dqn()
+def setup_coin_env():
+    env = coin_game.CoinGame()
+    num_actions = 4
+    return env, num_actions
+
+train_dqn(*setup_coin_env())
+#train_double_dqn(*setup_coin_env())

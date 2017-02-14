@@ -121,6 +121,7 @@ class DQLearner(interfaces.LearningAgent):
 
     def get_action(self, state):
         state_input = np.transpose(state, [1, 2, 0])
+
         [q_values] = self.sess.run([self.q_online],
                                    feed_dict={self.inp_frames: [state_input],
                                               self.inp_mask: np.ones((1, self.frame_history), dtype=np.float32)})

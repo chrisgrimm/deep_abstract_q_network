@@ -1,6 +1,9 @@
+import datetime
 import pygame
 from interfaces import Environment
 import numpy as np
+import cv2
+import copy
 
 GRID_COLOR = (0, 0, 0)
 BACKGROUND_COLOR = (255, 255,  255)
@@ -18,15 +21,15 @@ WEST = 3
 
 class CoinGame(Environment):
 
-    def __init__(self, map_width=10, map_height=10, max_actions=1000, image_states=True):
+    def __init__(self, map_width=10, map_height=10, max_actions=1000, frame_history_length=4, image_states=True):
         # useful game dimensions
-        self.tile_size = 60
+        self.tile_size = 10
         self.map_width = map_width
         self.map_height = map_height
 
         self.agent = (0, 0)
-        self.button = (1, 2)
-        self.coin = (2, 2)
+        self.button = (0, map_height-1)
+        self.coin = (map_width-1, 0)
         self.coin_is_present = True
 
         self.max_actions = max_actions
@@ -34,10 +37,17 @@ class CoinGame(Environment):
 
         self.image_states = image_states
 
+        self.zero_history_frames = [np.zeros((84, 84), dtype=np.uint8) for i in range(0, frame_history_length)]
+        self.frame_history = copy.copy(self.zero_history_frames)
+
         pygame.init()
         self.screen = pygame.display.set_mode((self.map_width * self.tile_size, self.map_height * self.tile_size))
         self.screen.fill(BACKGROUND_COLOR)
-        self.draw()
+
+        self.refresh_time = datetime.timedelta(milliseconds=1000 / 60)
+        self.last_refresh = datetime.datetime.now()
+
+        self.refresh_gui()
 
     def perform_action(self, action):
 
@@ -71,16 +81,16 @@ class CoinGame(Environment):
             self.coin_is_present = False
             reward = 1
 
-        self.draw()
+        self.refresh_gui()
 
         self.action_ticker += 1
 
-        return start_state, action, reward, self.get_current_state(), self.is_current_state_terminal()
-
-    def get_current_state(self):
+        # create new state
         if self.image_states:
             self.render_screen()
-            state = pygame.surfarray.array2d(self.screen)
+            image = pygame.surfarray.array3d(self.screen)
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+            state = cv2.resize(image, (84, 84))
         else:
             state = np.zeros((self.map_width * self.map_height) + 1, np.float32)
 
@@ -90,21 +100,27 @@ class CoinGame(Environment):
             if self.coin_is_present:
                 state[-1] = 1.0
 
-        return state
+        self.frame_history[:-1] = self.frame_history[1:]
+        self.frame_history[-1] = state
+
+        return start_state, action, reward, self.get_current_state(), self.is_current_state_terminal()
+
+    def get_current_state(self):
+        return copy.copy(self.frame_history)
 
     def get_actions_for_state(self, state):
         return NORTH, EAST, SOUTH, WEST
 
     def reset_environment(self):
         self.agent = (0, 0)
-        pygame.display.update()
+        self.action_ticker = 0
+        self.frame_history = copy.copy(self.zero_history_frames)
+        self.coin_is_present = True
 
     def is_current_state_terminal(self):
         return self.action_ticker >= self.max_actions
 
     def render_screen(self):
-        # clear screen
-        self.screen.fill(BACKGROUND_COLOR)
 
         # loop through each row
         for row in range(self.map_height + 1):
@@ -120,10 +136,20 @@ class CoinGame(Environment):
             self.draw_object(self.coin, COIN_COLOR)
 
     def draw(self):
+        # clear screen
+        self.screen.fill(BACKGROUND_COLOR)
+
         self.render_screen()
 
         # update the display
         pygame.display.update()
+
+    def refresh_gui(self):
+        current_time = datetime.datetime.now()
+        if (current_time - self.last_refresh) > self.refresh_time:
+            self.last_refresh = current_time
+            self.draw()
+
 
     def draw_object(self, coord, color):
         rect = (coord[0] * self.tile_size, coord[1] * self.tile_size, self.tile_size, self.tile_size)
