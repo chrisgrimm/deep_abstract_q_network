@@ -96,7 +96,7 @@ class DQLearner(interfaces.LearningAgent):
                        self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2})
         return loss
 
-    def run_learning_episode(self, environment, max_episode_steps=100000, offline=False):
+    def run_learning_episode(self, environment, max_episode_steps=1000, offline=False):
         episode_steps = 0
         total_reward = 0
         for steps in range(max_episode_steps):
