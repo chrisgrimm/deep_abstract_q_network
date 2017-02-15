@@ -42,7 +42,7 @@ all_frames, all_actions, all_rewards = extract_all_episodes(episode_dir)
 
 
 def load_into_replay_memory(all_frames, all_actions, all_rewards):
-    replay_buffer = ReplayMemory([84, 84], 'uint8', 10000, 4)
+    replay_buffer = ReplayMemory([84, 84], 'uint8', 1000000, 4)
     for ep in xrange(len(all_frames)):
         ep_length = len(all_frames[ep])-1
         for i in xrange(ep_length):
