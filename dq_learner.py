@@ -54,7 +54,7 @@ class DQLearner(interfaces.LearningAgent):
                                error_clip * tf.abs(self.delta))
         self.loss = tf.reduce_sum(self.error)
         self.g = tf.gradients(self.loss, self.q_online)
-        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, centered=True, epsilon=0.01)
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, epsilon=0.01)
         self.train_op = optimizer.minimize(self.loss, var_list=th.get_vars('online'))
         self.copy_op = th.make_copy_op('online', 'target')
         self.saver = tf.train.Saver(var_list=th.get_vars('online'))
