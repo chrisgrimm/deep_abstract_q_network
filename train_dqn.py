@@ -14,7 +14,7 @@ test_frames = 125000
 
 game = 'freeway'
 game_dir = './roms'
-results_dir = './results/offline_freeway'
+results_dir = './results/offline_freeway2'
 
 # open results file
 results_fn = '%s/%s_results.txt' % (results_dir, game)
@@ -139,5 +139,15 @@ def setup_coin_env():
     num_actions = 4
     return env, num_actions
 
+def observe_trained_dqn(filepath):
+    env = atari.AtariEnvironment(game_dir + '/' + game +'.bin', use_gui=True)
+    num_actions = len(env.ale.getMinimalActionSet())
+    training_epsilon = 0.1
+    test_epsilon = 0.05
+    dqn = atari_dqn.AtariDQN(4, num_actions, shared_bias=False)
+    agent = dq_learner.DQLearner(dqn, num_actions, target_copy_freq=10000, epsilon_end=training_epsilon, double=False, restore_network_file=filepath)
+    evaluate_agent_reward(100000, env, agent, test_epsilon)
+
 train_dqn(*setup_atari_env(), offline=True)
+#observe_trained_dqn('./freeway_best_net.ckpt')
 #train_double_dqn(*setup_coin_env())
