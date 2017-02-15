@@ -9,12 +9,12 @@ import atari_dqn
 import coin_game
 import jun_batch_helper
 num_steps = 50000000
-test_interval = 250000
-test_frames = 125000
+test_interval = 25000
+test_frames = 12500
 
 game = 'freeway'
 game_dir = './roms'
-results_dir = './results/offline_freeway2'
+results_dir = './results/offline_freeway3'
 
 # open results file
 results_fn = '%s/%s_results.txt' % (results_dir, game)
