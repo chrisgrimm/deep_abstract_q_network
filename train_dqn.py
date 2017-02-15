@@ -112,8 +112,10 @@ def train_dqn(env, num_actions, offline=False):
     if offline:
         offline_buffer = jun_batch_helper.buffer
     agent = dq_learner.DQLearner(dqn, num_actions, target_copy_freq=10000, epsilon_end=training_epsilon, double=False, offline_buffer=offline_buffer)
-
-    train(agent, env, test_epsilon)
+    if offline:
+        train_offline(agent, env, test_epsilon)
+    else:
+        train(agent, env, test_epsilon)
 
 
 

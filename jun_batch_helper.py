@@ -27,7 +27,7 @@ def extract_episode(episode_dir):
     return frames, actions_onehot, rewards
 
 def extract_all_episodes(episode_dir):
-    episodes = [os.path.join(episode_dir, x) for x in os.listdir(episode_dir)]
+    episodes = [os.path.join(episode_dir, x) for x in os.listdir(episode_dir)][:2]
     episodes = [e for e in episodes if os.path.isdir(e)]
     all_frames, all_actions, all_rewards = [], [], []
     for episode in tqdm.tqdm(episodes):
