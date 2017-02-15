@@ -7,6 +7,7 @@ import atari
 import dq_learner
 import atari_dqn
 import coin_game
+import daqn
 
 num_steps = 50000000
 test_interval = 250000
@@ -14,7 +15,7 @@ test_frames = 125000
 
 game = 'coin_game'
 game_dir = './roms'
-results_dir = './results/double_dqn/coin_game'
+results_dir = './results/daqn/coin_game'
 
 # open results file
 results_fn = '%s/%s_results.txt' % (results_dir, game)
@@ -93,6 +94,14 @@ def train_double_dqn(env, num_actions):
 
     train(agent, env, test_epsilon)
 
+def train_daqn(env, num_actions):
+    training_epsilon = 0.1
+    test_epsilon = 0.05
+
+    agent = daqn.L1_Learner(2, num_actions)
+
+    train(agent, env, test_epsilon)
+
 def setup_atari_env():
     # create Atari environment
     env = atari.AtariEnvironment(game_dir + '/' + game + '.bin')
@@ -104,5 +113,6 @@ def setup_coin_env():
     num_actions = 4
     return env, num_actions
 
-train_dqn(*setup_coin_env())
+# train_dqn(*setup_coin_env())
 #train_double_dqn(*setup_coin_env())
+train_daqn(*setup_coin_env())
