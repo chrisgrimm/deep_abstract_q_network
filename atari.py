@@ -5,6 +5,7 @@ import cv2
 import datetime
 import copy
 import pygame
+import jun_batch_helper
 
 class AtariEnvironment(interfaces.Environment):
 
@@ -42,9 +43,17 @@ class AtariEnvironment(interfaces.Environment):
             self.gui_screen = pygame.display.set_mode((w, h))
 
     def _get_frame(self):
+        '''
         self.ale.getScreenGrayscale(self.screen_image)
         image = self.screen_image.reshape([self.screen_height, self.screen_width, 1])
         self.original_frame = image
+        image = cv2.resize(image, (84, 84))
+        '''
+        image = self.ale.getScreenRGB()
+        image = np.reshape(image, [self.screen_height, self.screen_width, 3])
+        image = np.rint(image[:, :, [2]]*0.2989 + image[:, :, [1]]*0.5870 + image[:, :, [0]]*0.1140).astype(np.uint8)
+        self.original_frame = image
+        self.screen_image = np.reshape(image, [self.screen_height, self.screen_width])
         image = cv2.resize(image, (84, 84))
         return image
 

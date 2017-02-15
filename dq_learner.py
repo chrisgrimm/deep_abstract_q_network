@@ -10,7 +10,7 @@ class DQLearner(interfaces.LearningAgent):
     def __init__(self, dqn, num_actions, gamma=0.99, learning_rate=0.00025, replay_start_size=50000,
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
-                 frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True):
+                 frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True, offline_buffer=None):
         self.dqn = dqn
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
@@ -25,6 +25,7 @@ class DQLearner(interfaces.LearningAgent):
         self.inp_reward = tf.placeholder(tf.float32, [None])
         self.inp_mask = tf.placeholder(inp_dtype, [None, frame_history])
         self.inp_sp_mask = tf.placeholder(inp_dtype, [None, frame_history])
+        self.offline_buffer = offline_buffer
         self.gamma = gamma
         with tf.variable_scope('online'):
             mask_shape = [-1] + [1]*len(self.dqn.get_input_shape()) + [frame_history]
@@ -79,8 +80,11 @@ class DQLearner(interfaces.LearningAgent):
             print 'Restored network from file'
         self.sess.run(self.copy_op)
 
-    def update_q_values(self):
-        S1, A, R, S2, T, M1, M2 = self.replay_buffer.sample(self.batch_size)
+    def update_q_values(self, offline=False):
+        if offline:
+            S1, A, R, S2, T, M1, M2 = self.offline_buffer.sample(self.batch_size)
+        else:
+            S1, A, R, S2, T, M1, M2 = self.replay_buffer.sample(self.batch_size)
         Aonehot = np.zeros((self.batch_size, self.num_actions), dtype=np.float32)
         Aonehot[range(len(A)), A] = 1
 
@@ -92,27 +96,29 @@ class DQLearner(interfaces.LearningAgent):
                        self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2})
         return loss
 
-    def run_learning_episode(self, environment, max_episode_steps=100000):
+    def run_learning_episode(self, environment, max_episode_steps=100000, offline=False):
         episode_steps = 0
         total_reward = 0
         for steps in range(max_episode_steps):
-            if environment.is_current_state_terminal():
-                break
+            # supporting offline learning.
+            if not offline:
+                if environment.is_current_state_terminal():
+                    break
 
-            state = environment.get_current_state()
-            if np.random.uniform(0, 1) < self.epsilon:
-                action = np.random.choice(environment.get_actions_for_state(state))
+                state = environment.get_current_state()
+                if np.random.uniform(0, 1) < self.epsilon:
+                    action = np.random.choice(environment.get_actions_for_state(state))
+                else:
+                    action = self.get_action(state)
+                if self.replay_buffer.size() > self.replay_start_size:
+                    self.epsilon = max(self.epsilon_min, self.epsilon - self.epsilon_delta)
+                state, action, reward, next_state, is_terminal = environment.perform_action(action)
+                total_reward += reward
+                self.replay_buffer.append(state[-1], action, reward, next_state[-1], is_terminal)
+                if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
+                    loss = self.update_q_values()
             else:
-                action = self.get_action(state)
-
-            if self.replay_buffer.size() > self.replay_start_size:
-                self.epsilon = max(self.epsilon_min, self.epsilon - self.epsilon_delta)
-
-            state, action, reward, next_state, is_terminal = environment.perform_action(action)
-            total_reward += reward
-            self.replay_buffer.append(state[-1], action, reward, next_state[-1], is_terminal)
-            if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
-                loss = self.update_q_values()
+                loss = self.update_q_values(offline=True)
             if (self.action_ticker - self.replay_start_size) % self.target_copy_freq == 0:
                 self.sess.run(self.copy_op)
             self.action_ticker += 1
