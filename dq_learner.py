@@ -118,7 +118,8 @@ class DQLearner(interfaces.LearningAgent):
                 if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
                     loss = self.update_q_values()
             else:
-                loss = self.update_q_values(offline=True)
+                if self.action_ticker % self.update_freq == 0:
+                    loss = self.update_q_values(offline=True)
             if (self.action_ticker - self.replay_start_size) % self.target_copy_freq == 0:
                 self.sess.run(self.copy_op)
             self.action_ticker += 1
