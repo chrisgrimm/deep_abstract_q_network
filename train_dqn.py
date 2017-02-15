@@ -9,7 +9,7 @@ import atari_dqn
 import coin_game
 import jun_batch_helper
 num_steps = 50000000
-test_interval = 250000
+test_interval = 1000
 test_frames = 125000
 
 game = 'freeway'
