@@ -128,7 +128,7 @@ def train_double_dqn(env, num_actions):
 
 def setup_atari_env():
     # create Atari environment
-    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin')
+    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', use_gui=False)
     num_actions = len(env.ale.getMinimalActionSet())
     return env, num_actions
 
@@ -137,5 +137,5 @@ def setup_coin_env():
     num_actions = 4
     return env, num_actions
 
-train_dqn(*setup_coin_env(), offline=True)
+train_dqn(*setup_atari_env(), offline=True)
 #train_double_dqn(*setup_coin_env())
