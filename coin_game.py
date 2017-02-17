@@ -21,7 +21,7 @@ WEST = 3
 
 class CoinGame(Environment):
 
-    def __init__(self, map_width=10, map_height=10, max_actions=1000, frame_history_length=4, image_states=True):
+    def __init__(self, map_width=10, map_height=10, max_actions=1000, frame_history_length=1, image_states=True):
         # useful game dimensions
         self.tile_size = 10
         self.map_width = map_width
@@ -44,6 +44,12 @@ class CoinGame(Environment):
         self.screen = pygame.display.set_mode((self.map_width * self.tile_size, self.map_height * self.tile_size))
         self.screen.fill(BACKGROUND_COLOR)
 
+        # self.state_vis_screen = np.zeros((self.map_height * self.tile_size, self.map_width * self.tile_size * 2, 3), dtype=np.uint8)
+        # cv2.namedWindow('state_vis')
+        # cv2.startWindowThread()
+        # cv2.imshow('state_vis', self.state_vis_screen)
+        # cv2.waitKey(1)
+
         self.refresh_time = datetime.timedelta(milliseconds=1000 / 60)
         self.last_refresh = datetime.datetime.now()
 
@@ -63,6 +69,8 @@ class CoinGame(Environment):
             dx = 1
         elif action == WEST:
             dx = -1
+        else:
+            raise Exception('Action not recognized')
 
         new_agent = (self.agent[0] + dx, self.agent[1] + dy)
 
@@ -121,6 +129,8 @@ class CoinGame(Environment):
         return self.action_ticker >= self.max_actions
 
     def render_screen(self):
+        # clear screen
+        self.screen.fill(BACKGROUND_COLOR)
 
         # loop through each row
         for row in range(self.map_height + 1):
@@ -136,9 +146,6 @@ class CoinGame(Environment):
             self.draw_object(self.coin, COIN_COLOR)
 
     def draw(self):
-        # clear screen
-        self.screen.fill(BACKGROUND_COLOR)
-
         self.render_screen()
 
         # update the display
@@ -150,10 +157,56 @@ class CoinGame(Environment):
             self.last_refresh = current_time
             self.draw()
 
-
     def draw_object(self, coord, color):
         rect = (coord[0] * self.tile_size, coord[1] * self.tile_size, self.tile_size, self.tile_size)
         pygame.draw.ellipse(self.screen, color, rect)
+
+    def abstraction(self):
+        return np.array([0, 1]) if self.coin_is_present else np.array([1, 0])
+
+    def visualize_l1_states(self, l1_state_probs_tf, inp_frames, inp_mask, sess):
+        current_agent = self.agent
+        current_coin_is_present = self.coin_is_present
+
+        all_states = []
+        for b in range(2):
+            for x in range(self.map_width):
+                for y in range(self.map_height):
+                    self.coin_is_present = bool(b)
+                    self.agent = (x, y)
+                    self.render_screen()
+                    image = pygame.surfarray.array3d(self.screen)
+                    image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+                    state = cv2.resize(image, (84, 84))
+                    all_states.append(state)
+
+        all_probs = []
+        for state in all_states:
+            [l1_state_probs] = sess.run([l1_state_probs_tf],
+                                           feed_dict={inp_frames: np.reshape(state, [1, 84, 84, 1]),
+                                                      inp_mask: np.ones((1, 1), dtype=np.float32)})
+            all_probs.append(l1_state_probs[0])
+
+        # i = 0
+        # for x in range(self.map_width*2):
+        #     for y in range(self.map_height):
+        #         probs = all_probs[i]
+        #         color = (int(probs[0]*255), 0, int(probs[1]*255))
+        #
+        #         pt1 = (x * self.tile_size, y * self.tile_size)
+        #         pt2 = (pt1[0] + self.tile_size, pt1[1] + self.tile_size)
+        #         cv2.rectangle(self.state_vis_screen, pt1, pt2, color, thickness=-1)
+        #
+        #         i += 1
+        #
+        # cv2.imshow('state_vis', self.state_vis_screen)
+        # cv2.waitKey(1)
+        # self.agent = current_agent
+        # self.coin_is_present = current_coin_is_present
+
+        with open('all_probs.txt', 'w') as f:
+            for probs in all_probs:
+                f.write('%f,%f\n' % (probs[0], probs[1]))
 
 
 if __name__ == "__main__":

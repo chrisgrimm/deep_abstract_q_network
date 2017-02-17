@@ -12,14 +12,9 @@ import daqn
 num_steps = 50000000
 test_interval = 250000
 test_frames = 125000
-
-game = 'coin_game'
 game_dir = './roms'
-results_dir = './results/daqn/coin_game'
 
-# open results file
-results_fn = '%s/%s_results.txt' % (results_dir, game)
-results_file = open(results_fn, 'w')
+vis_update_interval = 10000
 
 
 def evaluate_agent_reward(steps, env, agent, epsilon):
@@ -45,9 +40,14 @@ def evaluate_agent_reward(steps, env, agent, epsilon):
     return episode_rewards
 
 
-def train(agent, env, test_epsilon):
+def train(agent, env, test_epsilon, results_dir):
+    # open results file
+    results_fn = '%s/%s_results.txt' % (results_dir, game)
+    results_file = open(results_fn, 'w')
+
     step_num = 0
     steps_until_test = test_interval
+    steps_until_vis_update = 0
     best_eval_reward = - float('inf')
     while step_num < num_steps:
         env.reset_environment()
@@ -56,8 +56,12 @@ def train(agent, env, test_epsilon):
         episode_steps, episode_reward = agent.run_learning_episode(env)
         end_time = datetime.datetime.now()
         step_num += episode_steps
+
         print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
-        end_time - start_time).total_seconds(), '\tEps:', agent.epsilon
+        end_time - start_time).total_seconds(), '\tL1Eps:', agent.epsilon, '\tL0Eps:', agent.l0_learner.epsilon
+
+        # print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
+        #     end_time - start_time).total_seconds(), '\tEps:', agent.epsilon
 
         steps_until_test -= episode_steps
         if steps_until_test <= 0:
@@ -74,33 +78,46 @@ def train(agent, env, test_epsilon):
             results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
             results_file.flush()
 
+        steps_until_vis_update -= episode_steps
+        if steps_until_vis_update <= 0:
+            steps_until_vis_update += vis_update_interval
+
+            # env.visualize_l1_states(agent.sigma_query_probs, agent.inp_frames, agent.inp_mask, agent.sess)
+
 
 def train_dqn(env, num_actions):
+    results_dir = './results/dqn/coin_game'
+
     training_epsilon = 0.1
     test_epsilon = 0.05
 
-    dqn = atari_dqn.AtariDQN(4, num_actions, shared_bias=False)
-    agent = dq_learner.DQLearner(dqn, num_actions, target_copy_freq=10000, epsilon_end=training_epsilon, double=False)
+    frame_history = 1
+    dqn = atari_dqn.AtariDQN(frame_history, num_actions, shared_bias=False)
+    agent = dq_learner.DQLearner(dqn, num_actions, target_copy_freq=10000, epsilon_end=training_epsilon, double=False, frame_history=frame_history)
 
-    train(agent, env, test_epsilon)
+    train(agent, env, test_epsilon, results_dir)
 
 
 def train_double_dqn(env, num_actions):
+    results_dir = './results/double_dqn/coin_game'
+
     training_epsilon = 0.01
     test_epsilon = 0.001
 
     dqn = atari_dqn.AtariDQN(4, num_actions)
     agent = dq_learner.DQLearner(dqn, num_actions, epsilon_end=training_epsilon)
 
-    train(agent, env, test_epsilon)
+    train(agent, env, test_epsilon, results_dir)
 
 def train_daqn(env, num_actions):
+    results_dir = './results/daqn/coin_game'
+
     training_epsilon = 0.1
     test_epsilon = 0.05
 
-    agent = daqn.L1_Learner(2, num_actions)
+    agent = daqn.L1_Learner(2, num_actions, abstraction_function=env.abstraction)
 
-    train(agent, env, test_epsilon)
+    train(agent, env, test_epsilon, results_dir)
 
 def setup_atari_env():
     # create Atari environment
@@ -113,6 +130,8 @@ def setup_coin_env():
     num_actions = 4
     return env, num_actions
 
+
+game = 'coin_game'
 # train_dqn(*setup_coin_env())
 #train_double_dqn(*setup_coin_env())
 train_daqn(*setup_coin_env())
