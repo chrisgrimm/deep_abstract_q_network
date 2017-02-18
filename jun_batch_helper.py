@@ -1,5 +1,6 @@
 import cv2, numpy as np, os, tqdm
 from replay_memory import ReplayMemory
+import itertools
 
 num_actions = 3
 def modify_image(image):
@@ -37,11 +38,12 @@ def extract_all_episodes(episode_dir):
         all_rewards.append(rewards)
     return all_frames, all_actions, all_rewards
 
-def extract_all_episodes_iter(episode_dir):
+def extract_all_episodes_iter(episode_dir, cycle=False):
     episodes = [os.path.join(episode_dir, x) for x in os.listdir(episode_dir)]
     episodes = [e for e in episodes if os.path.isdir(e)]
     #all_frames, all_actions, all_rewards = [], [], []
-    for episode in tqdm.tqdm(episodes):
+    iter = itertools.cycle(episodes) if cycle else tqdm.tqdm(episodes)
+    for episode in iter:
         frames, actions, rewards = extract_episode(episode)
         yield frames, actions, rewards
         #all_frames.append(frames)
@@ -51,9 +53,8 @@ def extract_all_episodes_iter(episode_dir):
 
 #all_frames, all_actions, all_rewards = extract_all_episodes(episode_dir)
 
-
 def load_into_replay_memory(episode_dir):
-    replay_buffer = ReplayMemory([84, 84], 'uint8', 1000000, 4)
+    replay_buffer = ReplayMemory([84, 84], 'uint8', 2000000, 4)
     j = 0
     for frames, actions, rewards in extract_all_episodes_iter(episode_dir):
         ep_length = len(frames)-1
@@ -67,4 +68,4 @@ def load_into_replay_memory(episode_dir):
     return replay_buffer
 
 print 'Loading replay memory...'
-buffer = load_into_replay_memory('../train_1mil')
+buffer = load_into_replay_memory('../train_2mil')
