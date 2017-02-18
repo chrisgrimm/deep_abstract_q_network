@@ -14,7 +14,7 @@ test_frames = 125000
 
 game = 'freeway'
 game_dir = './roms'
-results_dir = './results/offline_freeway4'
+results_dir = './results/offline_freeway_1mil'
 
 # open results file
 results_fn = '%s/%s_results.txt' % (results_dir, game)
