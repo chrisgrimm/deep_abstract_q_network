@@ -68,4 +68,4 @@ def load_into_replay_memory(episode_dir):
     return replay_buffer
 
 print 'Loading replay memory...'
-buffer = load_into_replay_memory('../train_2mil')
+#buffer = load_into_replay_memory('../train_2mil')

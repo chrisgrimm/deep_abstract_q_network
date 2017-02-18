@@ -14,7 +14,7 @@ test_frames = 125000
 
 game = 'freeway'
 game_dir = './roms'
-results_dir = './results/offline_freeway_2mil'
+results_dir = './results/online_freeway'
 
 # open results file
 results_fn = '%s/%s_results.txt' % (results_dir, game)
@@ -148,6 +148,6 @@ def observe_trained_dqn(filepath):
     agent = dq_learner.DQLearner(dqn, num_actions, target_copy_freq=10000, epsilon_end=training_epsilon, double=False, restore_network_file=filepath)
     evaluate_agent_reward(100000, env, agent, test_epsilon)
 print 'moop'
-train_dqn(*setup_atari_env(), offline=True)
+train_dqn(*setup_atari_env(), offline=False)
 #observe_trained_dqn('./freeway_best_net.ckpt')
 #train_double_dqn(*setup_coin_env())
