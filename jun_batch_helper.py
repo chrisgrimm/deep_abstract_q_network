@@ -37,21 +37,34 @@ def extract_all_episodes(episode_dir):
         all_rewards.append(rewards)
     return all_frames, all_actions, all_rewards
 
-episode_dir = '../train'
-all_frames, all_actions, all_rewards = extract_all_episodes(episode_dir)
+def extract_all_episodes_iter(episode_dir):
+    episodes = [os.path.join(episode_dir, x) for x in os.listdir(episode_dir)]
+    episodes = [e for e in episodes if os.path.isdir(e)]
+    #all_frames, all_actions, all_rewards = [], [], []
+    for episode in tqdm.tqdm(episodes):
+        frames, actions, rewards = extract_episode(episode)
+        yield frames, actions, rewards
+        #all_frames.append(frames)
+        #all_actions.append(actions)
+        #all_rewards.append(rewards)
+    #return all_frames, all_actions, all_rewards
+
+#all_frames, all_actions, all_rewards = extract_all_episodes(episode_dir)
 
 
-def load_into_replay_memory(all_frames, all_actions, all_rewards):
-    replay_buffer = ReplayMemory([84, 84], 'uint8', 500000, 4)
-    for ep in xrange(len(all_frames)):
-        ep_length = len(all_frames[ep])-1
+def load_into_replay_memory(episode_dir):
+    replay_buffer = ReplayMemory([84, 84], 'uint8', 1000000, 4)
+    j = 0
+    for frames, actions, rewards in extract_all_episodes_iter(episode_dir):
+        ep_length = len(frames)-1
         for i in xrange(ep_length):
-            s1 = all_frames[ep][i]
-            a = np.argmax(all_actions[ep][i])
-            r = all_rewards[ep][i]
-            s2 = all_frames[ep][i+1]
+            s1 = frames[i]
+            a = np.argmax(actions[i])
+            r = rewards[i]
+            s2 = frames[i+1]
             t = (i == (ep_length - 1))
             replay_buffer.append(s1, a, r, s2, t)
     return replay_buffer
 
-buffer = load_into_replay_memory(all_frames, all_actions, all_rewards)
+print 'Loading replay memory...'
+buffer = load_into_replay_memory('../train_1mil')

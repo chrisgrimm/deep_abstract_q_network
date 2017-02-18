@@ -131,3 +131,14 @@ class AtariEnvironment(interfaces.Environment):
             #pygame.display.update()
 
 
+'''state = np.zeros((84, 84, 1), dtype=np.uint8)
+next_state = np.zeros((84, 84, 1), dtype=np.uint8)
+cv2.imshow('state', state)
+cv2.imshow('next state', next_state)
+atari = AtariEnvironment('./roms/freeway.bin')
+while True:
+    state_, onehot_action, reward, next_state_, terminal = atari.perform_action(int(raw_input('Action:')))
+    print state_[-1].shape
+    state[:, :, 0] = state_[-1]
+    next_state[:, :, 0] = state_[-1]'''
+
