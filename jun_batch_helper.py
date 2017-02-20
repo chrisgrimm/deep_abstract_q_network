@@ -10,7 +10,7 @@ def modify_image(image):
 
 
 def extract_episode(episode_dir):
-    with open(os.path.join(episode_dir, 'act.log')) as f:
+    with open(os.path.join(episode_dir, 'action.log')) as f:
         actions = np.array([int(line) for line in f.readlines()])
         actions_onehot = np.zeros((len(actions), num_actions), dtype=np.uint8)
         actions_onehot[range(len(actions)), actions] = 1
