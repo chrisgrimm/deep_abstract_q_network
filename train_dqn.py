@@ -16,7 +16,7 @@ test_frames = 125000
 
 game = 'freeway'
 game_dir = './roms'
-results_dir = './results/offline_freeway_500k'
+results_dir = './results/offline_freeway_500K'
 
 # open results file
 results_fn = '%s/%s_results.txt' % (results_dir, game)
@@ -94,7 +94,7 @@ def train_offline(agent, env, test_epsilon):
         if steps_until_test <= 0:
             steps_until_test += test_interval
             print 'Evaluating network...'
-            episode_rewards = evaluate_agent_reward(test_frames, env, agent, test_epsilon)
+            episode_rewards = evaluate_agent_reward(12500, env, agent, test_epsilon)
             mean_reward = np.mean(episode_rewards)
 
             if mean_reward > best_eval_reward:

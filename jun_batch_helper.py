@@ -5,7 +5,8 @@ import itertools
 num_actions = 3
 def modify_image(image):
     #image = cv2.resize(image, (84, 84), interpolation=cv2.INTER_LINEAR)
-    image = np.rint(image[:, :, 0]*0.2989 + image[:, :, 1]*0.5870 + image[:, :, 2]*0.1140).astype(np.uint8)
+    #image = #np.rint(image[:, :, 0]*0.2989 + image[:, :, 1]*0.5870 + image[:, :, 2]*0.1140).astype(np.uint8)
+    image = image[:, :, 0]
     return image
 
 
