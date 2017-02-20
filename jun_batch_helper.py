@@ -68,7 +68,7 @@ def load_into_replay_memory(episode_dir):
             t = (i == (ep_length - 1))
             replay_buffer.append(s1, a, r, s2, t)
         cap_counter += ep_length
-        print cap_counter  
+        print cap_counter
         if cap_counter > capacity:
             break
     return replay_buffer
