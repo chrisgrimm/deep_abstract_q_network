@@ -4,8 +4,8 @@ import itertools
 
 num_actions = 3
 def modify_image(image):
-    image = cv2.resize(image, (84, 84), interpolation=cv2.INTER_LINEAR)
-    image = np.rint(image[:, :, 0]*0.2989 + image[:, :, 1]*0.5870 + image[:, :, 2]*0.1140).astype(np.uint8)
+    #image = cv2.resize(image, (84, 84), interpolation=cv2.INTER_LINEAR)
+    #image = np.rint(image[:, :, 0]*0.2989 + image[:, :, 1]*0.5870 + image[:, :, 2]*0.1140).astype(np.uint8)
     return image
 
 
@@ -68,4 +68,4 @@ def load_into_replay_memory(episode_dir):
     return replay_buffer
 
 print 'Loading replay memory...'
-#buffer = load_into_replay_memory('../train_2mil')
+buffer = load_into_replay_memory('./train')

@@ -193,9 +193,9 @@ def observe_trained_dqn(filepath):
     agent = dq_learner.DQLearner(dqn, num_actions, target_copy_freq=10000, epsilon_end=training_epsilon, double=False, restore_network_file=filepath)
     evaluate_agent_reward(100000, env, agent, test_epsilon)
 print 'moop'
-#train_dqn(*setup_atari_env(), offline=False)
+train_dqn(*setup_atari_env(), offline=True)
 #observe_trained_dqn('./freeway_best_net.ckpt')
 #train_double_dqn(*setup_coin_env())
 
-env, num_actions = setup_atari_env()
-generate_data(2000000, num_actions, './train', env, './results/online_freeway/freeway_best_net.ckpt')
+#env, num_actions = setup_atari_env()
+#generate_data(2000000, num_actions, './train', env, './results/online_freeway/freeway_best_net.ckpt')
