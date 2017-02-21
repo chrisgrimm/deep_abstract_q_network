@@ -55,7 +55,7 @@ def extract_all_episodes_iter(episode_dir, cycle=False):
 #all_frames, all_actions, all_rewards = extract_all_episodes(episode_dir)
 
 def load_into_replay_memory(episode_dir):
-    capacity = 500000
+    capacity = 2000000
     replay_buffer = ReplayMemory([84, 84], 'uint8', capacity, 4)
     j = 0
     cap_counter = 0
