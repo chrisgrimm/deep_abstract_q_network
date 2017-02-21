@@ -7,7 +7,7 @@ import atari
 import dq_learner
 import atari_dqn
 import coin_game
-import jun_batch_helper
+#import jun_batch_helper
 import os
 import cv2
 num_steps = 50000000
