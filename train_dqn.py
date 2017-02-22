@@ -16,7 +16,7 @@ test_frames = 125000
 
 game = 'freeway'
 game_dir = './roms'
-results_dir = './results/offline_freeway_2m'
+results_dir = './results/offline_freeway_500k'
 
 # open results file
 results_fn = '%s/%s_results.txt' % (results_dir, game)
@@ -195,9 +195,9 @@ def observe_trained_dqn(filepath):
 
 
 #print 'moop'
-#train_dqn(*setup_atari_env(), offline=True)
+train_dqn(*setup_atari_env(), offline=True)
 #observe_trained_dqn('./freeway_best_net.ckpt')
 #train_double_dqn(*setup_coin_env())
 
-env, num_actions = setup_atari_env()
-generate_data(8000000, num_actions, './train', env, './results/online_freeway/freeway_best_net.ckpt')
+#env, num_actions = setup_atari_env()
+#generate_data(8000000, num_actions, './train', env, './results/online_freeway/freeway_best_net.ckpt')
