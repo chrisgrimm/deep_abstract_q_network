@@ -18,7 +18,7 @@ def extract_episode(episode_dir):
     with open(os.path.join(episode_dir, 'reward.log')) as f:
         rewards = np.array([int(line) for line in f.readlines()], dtype=np.uint8)
     frame_files = [os.path.join(episode_dir, x) for x in os.listdir(episode_dir)]
-    frame_files = [f for f in frame_files if f.endswith('.png')]
+    frame_files = sorted([f for f in frame_files if f.endswith('.png')])
     #for f in frame_files:
     #    cv2.imshow('f', cv2.resize(modify_image(cv2.imread(f)) / 255.0, (400, 400)))
     #    cv2.waitKey()
