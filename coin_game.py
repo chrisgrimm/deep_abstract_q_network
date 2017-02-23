@@ -93,6 +93,11 @@ class CoinGame(Environment):
 
         self.action_ticker += 1
 
+        self.generate_new_state()
+
+        return start_state, action, reward, self.get_current_state(), self.is_current_state_terminal()
+
+    def generate_new_state(self):
         # create new state
         if self.image_states:
             self.render_screen()
@@ -111,8 +116,6 @@ class CoinGame(Environment):
         self.frame_history[:-1] = self.frame_history[1:]
         self.frame_history[-1] = state
 
-        return start_state, action, reward, self.get_current_state(), self.is_current_state_terminal()
-
     def get_current_state(self):
         return copy.copy(self.frame_history)
 
@@ -123,6 +126,7 @@ class CoinGame(Environment):
         self.agent = (0, 0)
         self.action_ticker = 0
         self.frame_history = copy.copy(self.zero_history_frames)
+        self.generate_new_state()
         self.coin_is_present = True
 
     def is_current_state_terminal(self):
@@ -162,7 +166,7 @@ class CoinGame(Environment):
         pygame.draw.ellipse(self.screen, color, rect)
 
     def abstraction(self):
-        return np.array([0, 1]) if self.coin_is_present else np.array([1, 0])
+        return np.array([0, 1], dtype=np.uint8) if self.coin_is_present else np.array([1, 0], dtype=np.uint8)
 
     def visualize_l1_states(self, l1_state_probs_tf, inp_frames, inp_mask, sess):
         current_agent = self.agent

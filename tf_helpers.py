@@ -62,5 +62,8 @@ def verify_copy_op():
     return weights_equal * bias_equal
 
 
-def get_vars(scope):
-    return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope)
+def get_vars(*scopes):
+    all_vars = []
+    for scope in scopes:
+        all_vars += tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope+'/')
+    return all_vars

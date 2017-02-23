@@ -110,12 +110,12 @@ def train_double_dqn(env, num_actions):
     train(agent, env, test_epsilon, results_dir)
 
 def train_daqn(env, num_actions):
-    results_dir = './results/daqn/coin_game'
+    results_dir = './results/daqn/coin_game_share_fc1'
 
     training_epsilon = 0.1
     test_epsilon = 0.05
 
-    agent = daqn.L1_Learner(2, num_actions, abstraction_function=env.abstraction)
+    agent = daqn.L1_Learner(2, num_actions, abstraction_function=env.abstraction, epsilon_end=training_epsilon)
 
     train(agent, env, test_epsilon, results_dir)
 
@@ -133,5 +133,5 @@ def setup_coin_env():
 
 game = 'coin_game'
 # train_dqn(*setup_coin_env())
-#train_double_dqn(*setup_coin_env())
+# train_double_dqn(*setup_coin_env())
 train_daqn(*setup_coin_env())
