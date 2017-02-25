@@ -205,8 +205,9 @@ class CoinGame(Environment):
         #
         # cv2.imshow('state_vis', self.state_vis_screen)
         # cv2.waitKey(1)
-        # self.agent = current_agent
-        # self.coin_is_present = current_coin_is_present
+
+        self.agent = current_agent
+        self.coin_is_present = current_coin_is_present
 
         with open('all_probs.txt', 'w') as f:
             for probs in all_probs:

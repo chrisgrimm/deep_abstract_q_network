@@ -82,8 +82,7 @@ def train(agent, env, test_epsilon, results_dir):
         if steps_until_vis_update <= 0:
             steps_until_vis_update += vis_update_interval
 
-            # env.visualize_l1_states(agent.sigma_query_probs, agent.inp_frames, agent.inp_mask, agent.sess)
-
+            env.visualize_l1_states(agent.sigma_query_probs, agent.inp_frames, agent.inp_mask, agent.sess)
 
 def train_dqn(env, num_actions):
     results_dir = './results/dqn/coin_game'
@@ -110,12 +109,13 @@ def train_double_dqn(env, num_actions):
     train(agent, env, test_epsilon, results_dir)
 
 def train_daqn(env, num_actions):
-    results_dir = './results/daqn/coin_game_share_fc1'
+    results_dir = './results/daqn/coin_game_learn_abs'
 
     training_epsilon = 0.1
     test_epsilon = 0.05
 
-    agent = daqn.L1_Learner(2, num_actions, abstraction_function=env.abstraction, epsilon_end=training_epsilon)
+    # agent = daqn.L1_Learner(2, num_actions, abstraction_function=env.abstraction, epsilon_end=training_epsilon)
+    agent = daqn.L1_Learner(2, num_actions, epsilon_end=training_epsilon)
 
     train(agent, env, test_epsilon, results_dir)
 

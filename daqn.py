@@ -29,21 +29,23 @@ def hook_visual(inp, frame_history):
         c3 = th.down_convolution(c2, 3, 1, 64, 64, tf.nn.relu)
         N = np.prod([x.value for x in c3.get_shape()[1:]])
         c3 = tf.reshape(c3, [-1, N])
-    with tf.variable_scope('fc1'):
-        vis = th.fully_connected(c3, 512, tf.nn.relu)
-    return vis
+    # with tf.variable_scope('fc1'):
+    #     vis = th.fully_connected(c3, 512, tf.nn.relu)
+    return c3
 
 def hook_abstraction(vis, num_abstract_states, batch_size, I = None):
-    with tf.variable_scope('vis'):
-        it_doesnt_matter = th.fully_connected(vis, num_abstract_states, lambda x: x)
+    with tf.variable_scope('fc1'):
+        fc1 = th.fully_connected(vis, 512, tf.nn.relu)
+    with tf.variable_scope('fc2'):
+        it_doesnt_matter = th.fully_connected(fc1, num_abstract_states, lambda x: x)
     return hardmax(it_doesnt_matter, batch_size, I=I)
 
 # inp : (84 x 84 x 4) tf.float329,570 ft
 def hook_l0(vis, num_abstract_actions, num_actions):
-    # with tf.variable_scope('fc1'):
-    #     fc1 = th.fully_connected(vis, 512, tf.nn.relu)
+    with tf.variable_scope('fc1'):
+        fc1 = th.fully_connected(vis, 512, tf.nn.relu)
     with tf.variable_scope('fc2'):
-        q_values = tf.reshape(th.fully_connected(vis, num_actions * num_abstract_actions, lambda x: x), [-1, num_abstract_actions, num_actions])
+        q_values = tf.reshape(th.fully_connected(fc1, num_actions * num_abstract_actions, lambda x: x), [-1, num_abstract_actions, num_actions])
     return q_values
 
 def hook_l1(inp_abstracted, num_abstract_actions):
@@ -76,7 +78,7 @@ class L0_Learner:
 
     def __init__(self, sess, abstraction_scope, visual_scope, num_actions, num_abstract_actions, num_abstract_states,
                  gamma=0.99, learning_rate=0.00025, replay_start_size=50000,
-                 epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
+                 epsilon_start=1.0, epsilon_end=0.1, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=10000, replay_memory_size=1000000,
                  frame_history=1, batch_size=32, error_clip=1, abstraction_function=None):
         self.sess = sess
@@ -119,8 +121,10 @@ class L0_Learner:
         mask = tf.reshape(self.inp_mask, [-1, 1, 1, 1])
         masked_input = self.inp_frames * mask
 
-        with tf.variable_scope('online_1'):
+        with tf.variable_scope(visual_scope, reuse=True):
             self.visual_output = hook_visual(masked_input, self.frame_history)
+
+        with tf.variable_scope('online_1'):
             self.q_online_1 = hook_l0(self.visual_output, 1, self.num_actions)
         with tf.variable_scope('online_2'):
             self.q_online_2 = hook_l0(self.visual_output, 1, self.num_actions)
@@ -129,8 +133,9 @@ class L0_Learner:
 
         mask_sp = tf.reshape(self.inp_sp_mask, [-1, 1, 1, 1])
         masked_input_sp = self.inp_sp_frames * mask_sp
-        with tf.variable_scope('target_1'):
+        with tf.variable_scope('target_visual'):
             self.visual_output_sp = hook_visual(masked_input_sp, self.frame_history)
+        with tf.variable_scope('target_1'):
             self.q_target_1 = hook_l0(self.visual_output_sp, 1, self.num_actions)
         with tf.variable_scope('target_2'):
             self.q_target_2 = hook_l0(self.visual_output_sp, 1, self.num_actions)
@@ -199,6 +204,7 @@ class L0_Learner:
         self.num_actions = num_actions
         self.batch_size = batch_size
 
+    # @profile
     def run_learning_episode(self, initial_sigma, l1_action, environment):
         assert flat_actions_to_state_pairs(np.argmax(l1_action), self.num_abstract_states)[0] == np.argmax(initial_sigma)
 
@@ -232,6 +238,7 @@ class L0_Learner:
 
         return initial_sigma, l1_action, R, sigma_p, environment.is_current_state_terminal(), episode_steps
 
+    # @profile
     def get_abstract_state(self, l0_state):
         if self.abstraction_function is None:
             [sigma] = self.sess.run([self.sigma_p], feed_dict={
@@ -359,7 +366,11 @@ class L1_Learner:
         self.g = tf.gradients(self.loss, self.q_online)
         optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, centered=True, epsilon=0.01)
         # TODO: add th.get_vars(self.visual_scope)+th.get_vars(self.abstraction_scope)
-        self.train_op = optimizer.minimize(self.loss, var_list=th.get_vars('l1_online'))
+        if self.abstraction_function is None:
+            self.train_op = optimizer.minimize(self.loss, var_list=th.get_vars('l1_online', self.abstraction_scope))
+        else:
+            self.train_op = optimizer.minimize(self.loss, var_list=th.get_vars('l1_online'))
+
         self.saver = tf.train.Saver(var_list=th.get_vars(self.visual_scope)+th.get_vars(self.abstraction_scope)+th.get_vars('l1_online')+th.get_vars('online'))
 
         self.replay_buffer = L1ReplayMemory((84, 84), np.uint8, replay_memory_size, 1)
@@ -375,7 +386,8 @@ class L1_Learner:
         self.batch_size = batch_size
 
         self.l0_learner = L0_Learner(self.sess, self.abstraction_scope, self.visual_scope, num_actions,
-                                     self.num_abstract_actions, self.num_abstract_states, abstraction_function=self.abstraction_function)
+                                     self.num_abstract_actions, self.num_abstract_states, abstraction_function=self.abstraction_function,
+                                     replay_start_size=1000)
 
         self.sess.run(tf.initialize_all_variables())
 
@@ -393,6 +405,7 @@ class L1_Learner:
                        self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2})
         return loss
 
+    # @profile
     def run_learning_episode(self, environment, max_episode_steps=100000):
         episode_steps = 0
         total_reward = 0
@@ -422,6 +435,7 @@ class L1_Learner:
             episode_steps += l0_episode_steps
         return episode_steps, total_reward
 
+    # @profile
     def get_l1_action(self, state):
         if self.abstraction_function is None:
             state_input = np.transpose(state, [1, 2, 0])
