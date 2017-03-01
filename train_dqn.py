@@ -8,6 +8,8 @@ import dq_learner
 import atari_dqn
 import coin_game
 import daqn
+# import daqn_clustering
+# import dq_learner_priors
 
 num_steps = 50000000
 test_interval = 250000
@@ -57,11 +59,11 @@ def train(agent, env, test_epsilon, results_dir):
         end_time = datetime.datetime.now()
         step_num += episode_steps
 
-        print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
-        end_time - start_time).total_seconds(), '\tL1Eps:', agent.epsilon, '\tL0Eps:', agent.l0_learner.epsilon
-
         # print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
-        #     end_time - start_time).total_seconds(), '\tEps:', agent.epsilon
+        # end_time - start_time).total_seconds(), '\tL1Eps:', agent.epsilon, '\tL0Eps:', agent.l0_learner.epsilon
+
+        print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
+            end_time - start_time).total_seconds(), '\tEps:', agent.epsilon
 
         steps_until_test -= episode_steps
         if steps_until_test <= 0:
@@ -109,7 +111,8 @@ def train_double_dqn(env, num_actions):
     train(agent, env, test_epsilon, results_dir)
 
 def train_daqn(env, num_actions):
-    results_dir = './results/daqn/coin_game_learn_abs'
+    results_dir = './results/daqn/coin_game_with_base_dqn'
+    env.results_dir = results_dir
 
     training_epsilon = 0.1
     test_epsilon = 0.05
@@ -118,6 +121,32 @@ def train_daqn(env, num_actions):
     agent = daqn.L1_Learner(2, num_actions, epsilon_end=training_epsilon)
 
     train(agent, env, test_epsilon, results_dir)
+#
+# def train_daqn_priors(env, num_actions):
+#     results_dir = './results/daqn_priors/coin_game'
+#     env.results_dir = results_dir
+#
+#     training_epsilon = 0.1
+#     test_epsilon = 0.05
+#
+#     agent = daqn_clustering.L1_Learner(2, num_actions, epsilon_end=training_epsilon)
+#
+#     train(agent, env, test_epsilon, results_dir)
+#
+# def train_dqn_priors(env, num_actions):
+#     results_dir = './results/priors/coin_game'
+#     env.results_dir = results_dir
+#
+#     training_epsilon = 0.1
+#     test_epsilon = 0.05
+#
+#     frame_history = 1
+#     dqn = dq_learner_priors.AtariDQN(frame_history, num_actions, shared_bias=False)
+#     agent = dq_learner_priors.DQLearner(dqn, num_actions, target_copy_freq=10000, epsilon_end=training_epsilon,
+#                                  frame_history=frame_history, restore_network_file='results/dqn/coin_game/coin_game_best_net.ckpt',
+#                                  epsilon_start=training_epsilon, replay_start_size=1000)
+#
+#     train(agent, env, test_epsilon, results_dir)
 
 def setup_atari_env():
     # create Atari environment
@@ -135,3 +164,5 @@ game = 'coin_game'
 # train_dqn(*setup_coin_env())
 # train_double_dqn(*setup_coin_env())
 train_daqn(*setup_coin_env())
+# train_daqn_priors(*setup_coin_env())
+# train_dqn_priors(*setup_coin_env())

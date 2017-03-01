@@ -48,6 +48,13 @@ def hook_l0(vis, num_abstract_actions, num_actions):
         q_values = tf.reshape(th.fully_connected(fc1, num_actions * num_abstract_actions, lambda x: x), [-1, num_abstract_actions, num_actions])
     return q_values
 
+def hook_base(vis, num_actions):
+    with tf.variable_scope('fc1'):
+        fc1 = th.fully_connected(vis, 512, tf.nn.relu)
+    with tf.variable_scope('fc2'):
+        q_values = tf.reshape(th.fully_connected(fc1, num_actions, lambda x: x), [-1, num_actions])
+    return q_values
+
 def hook_l1(inp_abstracted, num_abstract_actions):
     with tf.variable_scope('fc1'):
         q_values = th.fully_connected(inp_abstracted, num_abstract_actions, lambda x: x)
@@ -67,7 +74,7 @@ def valid_actions_for_sigma(actions_for_sigma, sigma, num_abstract_states):
 
 def sample_valid_l1_action(actions_for_sigma, sigma, num_abstract_states):
     valid_actions = np.sum(actions_for_sigma * np.reshape(sigma, [num_abstract_states, 1]), axis=1)
-    sampled_valid_action_index = np.random.choice(np.where(valid_actions == 1)[0])
+    sampled_valid_action_index = np.random.choice(np.where(np.round(valid_actions) == 1)[0])
     onehot = np.zeros((num_abstract_states,), dtype=np.float32)
     onehot[sampled_valid_action_index] = 1
     return onehot
@@ -80,12 +87,14 @@ class L0_Learner:
                  gamma=0.99, learning_rate=0.00025, replay_start_size=50000,
                  epsilon_start=1.0, epsilon_end=0.1, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=10000, replay_memory_size=1000000,
-                 frame_history=1, batch_size=32, error_clip=1, abstraction_function=None):
+                 frame_history=1, batch_size=32, error_clip=1, abstraction_function=None,
+                 max_episode_steps=-1):
         self.sess = sess
         self.num_abstract_actions = num_abstract_actions
         self.num_abstract_states = num_abstract_states
         self.num_actions = num_actions
         self.batch_size = batch_size
+        self.gamma = gamma
         self.frame_history = frame_history
         self.replay_buffer = ReplayMemory((84, 84), 'uint8', replay_memory_size,
                                           frame_history)
@@ -122,8 +131,11 @@ class L0_Learner:
         masked_input = self.inp_frames * mask
 
         with tf.variable_scope(visual_scope, reuse=True):
-            self.visual_output = hook_visual(masked_input, self.frame_history)
+            self.visual_output_base = hook_visual(masked_input, self.frame_history)
+            self.visual_output = tf.stop_gradient(self.visual_output_base)
 
+        with tf.variable_scope('online_base'):
+            self.q_online_base = hook_base(self.visual_output_base, self.num_actions)
         with tf.variable_scope('online_1'):
             self.q_online_1 = hook_l0(self.visual_output, 1, self.num_actions)
         with tf.variable_scope('online_2'):
@@ -133,8 +145,11 @@ class L0_Learner:
 
         mask_sp = tf.reshape(self.inp_sp_mask, [-1, 1, 1, 1])
         masked_input_sp = self.inp_sp_frames * mask_sp
+
         with tf.variable_scope('target_visual'):
             self.visual_output_sp = hook_visual(masked_input_sp, self.frame_history)
+        with tf.variable_scope('target_base'):
+            self.q_target_base = hook_base(self.visual_output_sp, self.num_actions)
         with tf.variable_scope('target_1'):
             self.q_target_1 = hook_l0(self.visual_output_sp, 1, self.num_actions)
         with tf.variable_scope('target_2'):
@@ -177,18 +192,27 @@ class L0_Learner:
                  tf.reshape(tf.cast(self.inp_terminated, dtype=tf.float32) * -1, [-1, 1])
 
         self.use_backup = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32) * tf.reduce_sum(self.sigma_p * self.sigma, reduction_indices=1)
-        self.y = self.r + tf.reshape(self.use_backup, [-1, 1]) * gamma * self.maxQ
+        self.y = tf.stop_gradient(self.r + tf.reshape(self.use_backup, [-1, 1]) * gamma * self.maxQ)
         self.delta = tf.reduce_sum(tf.reshape(self.inp_actions, [-1, 1, num_actions]) * self.q_online, reduction_indices=2) - self.y
         valid_actions_mask = valid_actions_for_sigma(self.actions_for_sigma, self.sigma, self.num_abstract_actions)
         self.masked_delta = self.delta * valid_actions_mask
-
         self.error = tf.select(tf.abs(self.masked_delta) < error_clip, 0.5 * tf.square(self.masked_delta),
                                error_clip * tf.abs(self.masked_delta))
-        self.loss = tf.reduce_sum(self.error)
+
+        # base dqn
+        self.maxQ_base = tf.reduce_max(self.q_target_base, reduction_indices=1)
+        self.r_base = tf.sign(self.inp_reward)
+        use_backup_base = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32)
+        self.y_base = tf.stop_gradient(self.r_base + use_backup_base * gamma * self.maxQ_base)
+        self.delta_base = tf.reduce_sum(self.inp_actions * self.q_online_base, reduction_indices=1) - self.y_base
+        self.error_base = tf.select(tf.abs(self.delta_base) < error_clip, 0.5 * tf.square(self.delta_base),
+                               error_clip * tf.abs(self.delta_base))
+
+        self.loss = tf.reduce_sum(self.error) + tf.reduce_sum(self.error_base)
         self.g = tf.gradients(self.loss, self.q_online)
         optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, centered=True, epsilon=0.01)
-        self.train_op = optimizer.minimize(self.loss, var_list=th.get_vars('online_1', 'online_2'))
-        self.copy_op = [th.make_copy_op('online_1', 'target_1'), th.make_copy_op('online_2', 'target_2')]
+        self.train_op = optimizer.minimize(self.loss, var_list=th.get_vars('online_1', 'online_2', 'online_base', visual_scope))
+        self.copy_op = [th.make_copy_op('online_1', 'target_1'), th.make_copy_op('online_2', 'target_2'), th.make_copy_op(visual_scope, 'target_visual'), th.make_copy_op('online_base', 'target_base')]
 
         self.replay_buffer = L1ReplayMemory((84, 84), 'uint8', replay_memory_size, frame_history)
         self.frame_history = frame_history
@@ -200,6 +224,7 @@ class L0_Learner:
         self.update_freq = update_freq
         self.target_copy_freq = target_copy_freq
         self.action_ticker = 1
+        self.max_episode_steps = max_episode_steps
 
         self.num_actions = num_actions
         self.batch_size = batch_size
@@ -212,6 +237,9 @@ class L0_Learner:
         episode_steps = 0
         sigma_p = initial_sigma
         while not environment.is_current_state_terminal():
+            if 0 <= self.max_episode_steps <= episode_steps:
+                break
+
             state = environment.get_current_state()
             if np.random.uniform(0, 1) < self.epsilon:
                 action = np.random.choice(environment.get_actions_for_state(state))
@@ -225,6 +253,7 @@ class L0_Learner:
             sigma_p = self.get_abstract_state(sp)
             self.replay_buffer.append(s[-1], np.argmax(initial_sigma), a, r, sp[-1], np.argmax(sigma_p), t)
             R += r # TODO: discount?
+            # R = R * self.gamma + r
 
             if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
                 loss = self.update_q_values()
@@ -255,10 +284,10 @@ class L0_Learner:
         Aonehot[range(len(A)), A] = 1
 
         if self.abstraction_function is None:
-            [_, loss, q_online, maxQ, q_target, r, y, error, delta, g] = self.sess.run(
+            [_, loss, q_online, maxQ, q_target, r, y, error, delta, g,
+             q_online_base] = self.sess.run(
                 [self.train_op, self.loss, self.q_online, self.maxQ, self.q_target, self.r, self.y, self.error,
-                 self.delta,
-                 self.g],
+                 self.delta, self.g, self.q_online_base],
                 feed_dict={self.inp_frames: S1, self.inp_actions: Aonehot,
                            self.inp_sp_frames: S2, self.inp_reward: R,
                            self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2})
@@ -278,11 +307,16 @@ class L0_Learner:
         return loss
 
     def get_action(self, state, l1_action):
-        [q_values] = self.sess.run([self.q_online],
+        # [q_values] = self.sess.run([self.q_online],
+        #                            feed_dict={self.inp_frames: np.reshape(state, [1, 84, 84, 1]),
+        #                                       self.inp_mask: np.ones((1, self.frame_history), dtype=np.float32)})
+        # q_values_l0_for_l1 = np.sum(q_values[0] * np.reshape(l1_action, [self.num_abstract_actions, 1]), axis=0)
+        # return np.argmax(q_values_l0_for_l1)
+
+        [q_values] = self.sess.run([self.q_online_base],
                                    feed_dict={self.inp_frames: np.reshape(state, [1, 84, 84, 1]),
                                               self.inp_mask: np.ones((1, self.frame_history), dtype=np.float32)})
-        q_values_l0_for_l1 = np.sum(q_values[0] * np.reshape(l1_action, [self.num_abstract_actions, 1]), axis=0)
-        return np.argmax(q_values_l0_for_l1)
+        return np.argmax(q_values)
 
 
 class L1_Learner:
@@ -340,7 +374,7 @@ class L1_Learner:
         with tf.variable_scope(self.abstraction_scope, reuse=True):
             self.sigma_p, self.sigma_p_probs = hook_abstraction(self.visual_output_sp, self.num_abstract_states, batch_size, I=self.inp_sigma_p_onehot)
 
-        self.possible_action_vector = valid_actions_for_sigma(self.actions_for_sigma, self.sigma, self.num_abstract_actions)
+        self.possible_action_vector = tf.stop_gradient(valid_actions_for_sigma(self.actions_for_sigma, self.sigma, self.num_abstract_actions))
         with tf.variable_scope('l1_online'):
             self.q_online = hook_l1(self.sigma, self.num_abstract_actions)
         with tf.variable_scope('l1_online', reuse=True):
@@ -358,12 +392,11 @@ class L1_Learner:
 
         self.r = tf.sign(self.inp_reward)
         use_backup = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32)
-        self.y = self.r + use_backup * gamma * self.maxQ
+        self.y = tf.stop_gradient(self.r + use_backup * gamma * self.maxQ)
         self.delta = tf.reduce_sum(self.inp_actions * self.q_online, reduction_indices=1) - self.y
         self.error = tf.select(tf.abs(self.delta) < error_clip, 0.5 * tf.square(self.delta),
                                error_clip * tf.abs(self.delta))
         self.loss = tf.reduce_sum(self.error)
-        self.g = tf.gradients(self.loss, self.q_online)
         optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, centered=True, epsilon=0.01)
         # TODO: add th.get_vars(self.visual_scope)+th.get_vars(self.abstraction_scope)
         if self.abstraction_function is None:
@@ -386,8 +419,8 @@ class L1_Learner:
         self.batch_size = batch_size
 
         self.l0_learner = L0_Learner(self.sess, self.abstraction_scope, self.visual_scope, num_actions,
-                                     self.num_abstract_actions, self.num_abstract_states, abstraction_function=self.abstraction_function,
-                                     replay_start_size=1000)
+                                     self.num_abstract_actions, self.num_abstract_states,
+                                     abstraction_function=self.abstraction_function, max_episode_steps=20)
 
         self.sess.run(tf.initialize_all_variables())
 
@@ -396,9 +429,9 @@ class L1_Learner:
         Aonehot = np.zeros((self.batch_size, self.num_abstract_actions), dtype=np.float32)
         Aonehot[range(len(A)), A] = 1
 
-        [_, loss, q_online, maxQ, q_target, r, y, error, delta, g, possible_action_vector_prime] = self.sess.run(
+        [_, loss, q_online, maxQ, q_target, r, y, error, delta, possible_action_vector_prime, sigma_probs] = self.sess.run(
             [self.train_op, self.loss, self.q_online, self.maxQ, self.q_target, self.r, self.y, self.error, self.delta,
-             self.g, self.possible_action_vector_prime],
+             self.possible_action_vector_prime, self.sigma_probs],
             feed_dict={self.inp_frames: S1, self.inp_actions: Aonehot,
                        self.inp_sp_frames: S2, self.inp_reward: R,
                        self.inp_sigma: Sigma1, self.inp_sigma_p: Sigma2,
@@ -409,16 +442,19 @@ class L1_Learner:
     def run_learning_episode(self, environment, max_episode_steps=100000):
         episode_steps = 0
         total_reward = 0
+
+        s = environment.get_current_state()
+        sigma = self.get_abstract_state(s)
+
         for steps in range(max_episode_steps):
             if environment.is_current_state_terminal():
                 break
 
-            s = environment.get_current_state()
-
-            sigma, alpha = self.get_l1_action(s)
             roll = np.random.uniform(0, 1)
             if roll < self.epsilon:
                 alpha = sample_valid_l1_action(self.actions_for_sigma, sigma, self.num_abstract_states)
+            else:
+                alpha = self.get_l1_action(sigma)
 
             if self.replay_buffer.size() > self.replay_start_size:
                 self.epsilon = max(self.epsilon_min, self.epsilon - self.epsilon_delta, self.l0_learner.epsilon)
@@ -433,10 +469,23 @@ class L1_Learner:
 
             self.action_ticker += 1
             episode_steps += l0_episode_steps
+
+            s = environment.get_current_state()
+            sigma = sigma_p
         return episode_steps, total_reward
 
+    def get_abstract_state(self, l0_state):
+        if self.abstraction_function is None:
+            [sigma] = self.sess.run([self.sigma_query], feed_dict={
+                self.inp_frames: np.reshape(l0_state, [1, 84, 84, 1]),
+                self.inp_mask: np.ones((1, self.frame_history), dtype=np.float32)
+            })
+            return sigma[0]
+        else:
+            return self.abstraction_function()
+
     # @profile
-    def get_l1_action(self, state):
+    def get_l1_state_and_action(self, state):
         if self.abstraction_function is None:
             state_input = np.transpose(state, [1, 2, 0])
             [sigma, q_values] = self.sess.run([self.sigma_query, self.q_online_query],
@@ -450,8 +499,14 @@ class L1_Learner:
         onehot_action[np.argmax(q_values[0])] = 1
         return sigma, onehot_action
 
+    def get_l1_action(self, sigma):
+        [q_values] = self.sess.run([self.q_online_query], feed_dict={self.sigma_query: np.reshape(sigma, (1, 2))})
+        onehot_action = np.zeros((self.num_abstract_actions,), dtype=np.float32)
+        onehot_action[np.argmax(q_values[0])] = 1
+        return onehot_action
+
     def get_action(self, state):
-        sigma, onehot_l1_action = self.get_l1_action(state)
+        sigma, onehot_l1_action = self.get_l1_state_and_action(state)
         l0_action = self.l0_learner.get_action(state, onehot_l1_action)
         return l0_action
 

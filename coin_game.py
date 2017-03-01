@@ -209,7 +209,7 @@ class CoinGame(Environment):
         self.agent = current_agent
         self.coin_is_present = current_coin_is_present
 
-        with open('all_probs.txt', 'w') as f:
+        with open(self.results_dir + '/all_probs.txt', 'w') as f:
             for probs in all_probs:
                 f.write('%f,%f\n' % (probs[0], probs[1]))
 
