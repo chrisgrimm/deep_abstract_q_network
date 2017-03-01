@@ -7,6 +7,7 @@ import atari
 import dq_learner
 import atari_dqn
 import coin_game
+import wind_tunnel
 import daqn
 # import daqn_clustering
 # import dq_learner_priors
@@ -80,11 +81,11 @@ def train(agent, env, test_epsilon, results_dir):
             results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
             results_file.flush()
 
-        steps_until_vis_update -= episode_steps
-        if steps_until_vis_update <= 0:
-            steps_until_vis_update += vis_update_interval
-
-            env.visualize_l1_states(agent.sigma_query_probs, agent.inp_frames, agent.inp_mask, agent.sess)
+        # steps_until_vis_update -= episode_steps
+        # if steps_until_vis_update <= 0:
+        #     steps_until_vis_update += vis_update_interval
+        #
+        #     env.visualize_l1_states(agent.sigma_query_probs, agent.inp_frames, agent.inp_mask, agent.sess)
 
 def train_dqn(env, num_actions):
     results_dir = './results/dqn/coin_game'
@@ -100,13 +101,14 @@ def train_dqn(env, num_actions):
 
 
 def train_double_dqn(env, num_actions):
-    results_dir = './results/double_dqn/coin_game'
+    results_dir = './results/double_dqn/wind_tunnel'
 
     training_epsilon = 0.01
     test_epsilon = 0.001
 
-    dqn = atari_dqn.AtariDQN(4, num_actions)
-    agent = dq_learner.DQLearner(dqn, num_actions, epsilon_end=training_epsilon)
+    frame_history = 1
+    dqn = atari_dqn.AtariDQN(frame_history, num_actions)
+    agent = dq_learner.DQLearner(dqn, num_actions, frame_history=frame_history, epsilon_end=training_epsilon)
 
     train(agent, env, test_epsilon, results_dir)
 
@@ -159,10 +161,18 @@ def setup_coin_env():
     num_actions = 4
     return env, num_actions
 
+def setup_wind_tunnel_env():
+    env = wind_tunnel.WindTunnel()
+    num_actions = len(env.get_actions_for_state(None))
+    return env, num_actions
 
-game = 'coin_game'
+
+# game = 'coin_game'
 # train_dqn(*setup_coin_env())
 # train_double_dqn(*setup_coin_env())
-train_daqn(*setup_coin_env())
+# train_daqn(*setup_coin_env())
 # train_daqn_priors(*setup_coin_env())
 # train_dqn_priors(*setup_coin_env())
+
+game = 'wind_tunnel'
+train_double_dqn(*setup_wind_tunnel_env())
