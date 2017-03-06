@@ -4,6 +4,7 @@ from interfaces import Environment
 import numpy as np
 import cv2
 import copy
+from random import randint
 
 GRID_COLOR = (0, 0, 0)
 BACKGROUND_COLOR = (255, 255,  255)
@@ -24,14 +25,15 @@ WINDOW_HEIGHT = 100
 
 class WindTunnel(Environment):
 
-    def __init__(self, width=100.0, step=1.0, wind=0.5, max_actions=1000):
+    def __init__(self, width=100.0, step=1.0, wind=0.05, max_actions=10000):
         # useful game dimensions
         self.width = width
         self.image_num = 0
         self.agent = 0.0
         self.step = step
         self.wind = wind
-
+        self.record_array = np.zeros((10000, 20, 200))
+        self.record_x = np.zeros((10000, 1))
         self.max_actions = max_actions
         self.action_ticker = 0
         self.terminal = False
@@ -115,9 +117,11 @@ class WindTunnel(Environment):
         self.render_screen()
         
         # update the display
-        data = pygame.image.save(self.screen, "directed_samples/%d-random.jpg" % self.image_num)
-        self.image_num += 1
         pygame.display.update()
+
+        data = pygame.image.save(self.screen, "random_samples_with_x_coord/%d-random.jpg" % self.image_num)
+        #self.agent => x coord 
+        self.image_num += 1
 
     def refresh_gui(self):
         current_time = datetime.datetime.now()
@@ -139,26 +143,16 @@ if __name__ == "__main__":
     running = True
     action = NOOP
 
+
+     
     while running:
-
+        events = (RIGHT_1, RIGHT_2, LEFT, NOOP)
         # respond to human input
-        for event in pygame.event.get():
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_DOWN:
-                    action = RIGHT_1
-                elif event.key == pygame.K_RIGHT:
-                    action = RIGHT_2
-                elif event.key == pygame.K_LEFT:
-                    action = LEFT
-            if event.type == pygame.KEYUP:
-                if event.key == pygame.K_RIGHT or event.key == pygame.K_DOWN or event.key == pygame.K_LEFT:
-                    action = NOOP
-
+      
         current_time = datetime.datetime.now()
         if (current_time - last_refresh) > refresh_time:
             last_refresh = current_time
-            game.perform_action(action)
-
+            game.perform_action(events[randint(0, 3)])
         if game.is_current_state_terminal():
             running = False
 
