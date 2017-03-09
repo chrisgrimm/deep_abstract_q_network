@@ -5,6 +5,9 @@ import numpy as np
 import cv2
 import copy
 from random import randint
+from PIL import Image
+from scipy.misc import toimage
+from numpy import linalg as LA
 
 GRID_COLOR = (0, 0, 0)
 BACKGROUND_COLOR = (255, 255,  255)
@@ -32,7 +35,7 @@ class WindTunnel(Environment):
         self.agent = 0.0
         self.step = step
         self.wind = wind
-        self.record_array = np.zeros((10000, 20, 200))
+        # self.record_array = np.zeros((10000, 20, 200))
         self.record_x = np.zeros((10000, 1))
         self.max_actions = max_actions
         self.action_ticker = 0
@@ -118,8 +121,15 @@ class WindTunnel(Environment):
         
         # update the display
         pygame.display.update()
-
+        # import pdb; pdb.set_trace()
+        # data = pygame.surfarray.array2d(self.screen)
+        # im = Image.fromarray(np.rot90(data)) 
+        # resize = im.resize((200, 20)) 
+        # x = np.resize(resize, ((20, 200)))
+        # self.record_array[self.image_num] = x
+        
         data = pygame.image.save(self.screen, "random_samples_with_x_coord/%d-random.jpg" % self.image_num)
+        self.record_x[self.image_num] = self.agent 
         #self.agent => x coord 
         self.image_num += 1
 
@@ -132,7 +142,6 @@ class WindTunnel(Environment):
     def draw_object(self, coord, color):
         rect = ((coord/self.width)*(WINDOW_WIDTH - WINDOW_HEIGHT), 0, WINDOW_HEIGHT, WINDOW_HEIGHT)
         pygame.draw.ellipse(self.screen, color, rect)
-
 
 if __name__ == "__main__":
     game = WindTunnel()
@@ -154,6 +163,8 @@ if __name__ == "__main__":
             last_refresh = current_time
             game.perform_action(events[randint(0, 3)])
         if game.is_current_state_terminal():
+            # np.save('random_samples_with_x.npy', game.record_array)
+            np.save('random_samples_coord.npy', game.record_x)
             running = False
 
 
