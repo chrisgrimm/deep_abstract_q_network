@@ -1,3 +1,4 @@
+import cv2
 import pygame
 from interfaces import Environment
 import numpy as np
@@ -43,13 +44,14 @@ class Room():
 
 class ToyMR(Environment):
 
-    def __init__(self, map_file):
+    def __init__(self, map_file, max_num_actions=10000):
 
         self.rooms, self.starting_room, self.starting_cell, self.goal_room, self.keys, self.doors = self.parse_map_file(map_file)
         self.room = self.starting_room
         self.agent = self.starting_cell
         self.has_key = False
         self.terminal = False
+        self.max_num_actions = max_num_actions
 
         # useful game dimensions
         self.tile_size = 60
@@ -64,11 +66,12 @@ class ToyMR(Environment):
         self.screen = pygame.display.set_mode((self.room.size[0] * self.tile_size, self.room.size[1] * self.tile_size + self.hud_height))
 
         # load assets
-        self.key_image = pygame.image.load('mr_maps/mr_key.png').convert_alpha()
+        self.key_image = pygame.image.load('./mr_maps/mr_key.png').convert_alpha()
         self.key_image = pygame.transform.scale(self.key_image, (self.hud_height, self.hud_height))
 
         self.screen.fill(BACKGROUND_COLOR)
         self.draw()
+        self.generate_new_state()
 
     def parse_map_file(self, map_file):
         rooms = {}
@@ -155,41 +158,46 @@ class ToyMR(Environment):
                 self.terminal = True
         else:
             # collision checks
-            cell = self.room.map[new_agent]
-            if cell == 0:
+            cell_type = self.room.map[new_agent]
+            if cell_type == 0:
                 self.agent = new_agent
-            elif cell == KEY_CODE:
+            elif cell_type == KEY_CODE:
                 if not self.has_key:
                     self.room.map[new_agent] = 0
                     self.room.key_collected = True
                     self.has_key = True
 
-                    assert (cell, self.room.loc) in self.keys
-                    self.keys[(cell, self.room.loc)] = False
+                    assert (self.room.loc, new_agent) in self.keys
+                    self.keys[(self.room.loc, new_agent)] = False
                 self.agent = new_agent
-            elif cell == DOOR_CODE:
+            elif cell_type == DOOR_CODE:
                 if self.has_key:
                     self.room.map[new_agent] = 0
                     self.room.door_opened = True
                     self.has_key = False
                     self.agent = new_agent
 
-                    assert (cell, self.room.loc) in self.doors
-                    self.doors[(cell, self.room.loc)] = False
+                    assert (self.room.loc, new_agent) in self.doors
+                    self.doors[(self.room.loc, new_agent)] = False
 
         self.draw()
 
         self.action_ticker += 1
 
+        self.generate_new_state()
+
         return start_state, action, reward, self.get_current_state(), self.is_current_state_terminal()
 
-    def get_current_state(self):
+    def generate_new_state(self):
         self.render_screen()
-        state = pygame.surfarray.array2d(self.screen)
+        image = pygame.surfarray.array3d(self.screen)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        self.state = cv2.resize(image, (84, 84))
 
-        return state
+    def get_current_state(self):
+        return [self.state]
 
-    def abstraction(self):
+    def abstraction(self, state):
         return self.room.loc + tuple(self.keys.values()) + tuple(self.doors.values())
 
     def get_actions_for_state(self, state):
@@ -200,6 +208,7 @@ class ToyMR(Environment):
         self.agent = self.starting_cell
         self.has_key = False
         self.terminal = False
+        self.action_ticker = 0
 
         for room in self.rooms.values():
             room.reset()
@@ -211,9 +220,10 @@ class ToyMR(Environment):
             self.doors[key] = True
 
         pygame.display.update()
+        self.generate_new_state()
 
     def is_current_state_terminal(self):
-        return self.terminal
+        return self.terminal or self.action_ticker > self.max_num_actions
 
     def render_screen(self):
         # clear screen
@@ -260,6 +270,9 @@ if __name__ == "__main__":
     map_file = 'mr_maps/four_rooms.txt'
     game = ToyMR(map_file)
 
+    l1_state = game.abstraction(None)
+    print l1_state
+
     running = True
     while running:
 
@@ -280,6 +293,10 @@ if __name__ == "__main__":
                 if action != -1:
                     game.perform_action(action)
 
+                    new_l1_state = game.abstraction(None)
+                    if new_l1_state != l1_state:
+                        l1_state = new_l1_state
+                        print l1_state
 
                     if game.is_current_state_terminal():
                         running = False
