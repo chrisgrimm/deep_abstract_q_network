@@ -45,7 +45,7 @@ class ToyMR(Environment):
 
     def __init__(self, map_file):
 
-        self.rooms, self.starting_room, self.starting_cell, self.goal_room = self.parse_map_file(map_file)
+        self.rooms, self.starting_room, self.starting_cell, self.goal_room, self.keys, self.doors = self.parse_map_file(map_file)
         self.room = self.starting_room
         self.agent = self.starting_cell
         self.has_key = False
@@ -72,6 +72,9 @@ class ToyMR(Environment):
 
     def parse_map_file(self, map_file):
         rooms = {}
+        keys = {}
+        doors = {}
+
         r = -1
         starting_room, starting_cell, goal_room = None, None, None
         with open(map_file) as f:
@@ -92,8 +95,10 @@ class ToyMR(Environment):
                                 room.map[c, r] = '1'
                             elif char == 'K':
                                 room.map[c, r] = KEY_CODE
+                                keys[(room.loc, (c, r))] = True
                             elif char == 'D':
                                 room.map[c, r] = DOOR_CODE
+                                doors[(room.loc, (c, r))] = True
                             elif char == 'S':
                                 starting_room = room
                                 starting_cell = (c, r)
@@ -103,7 +108,7 @@ class ToyMR(Environment):
 
         if starting_room is None or starting_cell is None:
             raise Exception('You must specify a starting location and goal room')
-        return rooms, starting_room, starting_cell, goal_room
+        return rooms, starting_room, starting_cell, goal_room, keys, doors
 
     def perform_action(self, action):
 
@@ -158,6 +163,9 @@ class ToyMR(Environment):
                     self.room.map[new_agent] = 0
                     self.room.key_collected = True
                     self.has_key = True
+
+                    assert (cell, self.room.loc) in self.keys
+                    self.keys[(cell, self.room.loc)] = False
                 self.agent = new_agent
             elif cell == DOOR_CODE:
                 if self.has_key:
@@ -165,6 +173,9 @@ class ToyMR(Environment):
                     self.room.door_opened = True
                     self.has_key = False
                     self.agent = new_agent
+
+                    assert (cell, self.room.loc) in self.doors
+                    self.doors[(cell, self.room.loc)] = False
 
         self.draw()
 
@@ -179,7 +190,7 @@ class ToyMR(Environment):
         return state
 
     def abstraction(self):
-        return self.room.loc[0], self.room.loc[1], self.room.key_collected, self.room.door_opened, self.has_key
+        return self.room.loc + tuple(self.keys.values()) + tuple(self.doors.values())
 
     def get_actions_for_state(self, state):
         return NORTH, EAST, SOUTH, WEST
@@ -189,6 +200,15 @@ class ToyMR(Environment):
         self.agent = self.starting_cell
         self.has_key = False
         self.terminal = False
+
+        for room in self.rooms.values():
+            room.reset()
+
+        for key, val in self.keys.iteritems():
+            self.keys[key] = True
+
+        for key, val in self.doors.iteritems():
+            self.doors[key] = True
 
         pygame.display.update()
 
@@ -259,6 +279,7 @@ if __name__ == "__main__":
 
                 if action != -1:
                     game.perform_action(action)
+
 
                     if game.is_current_state_terminal():
                         running = False
