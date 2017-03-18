@@ -1,3 +1,4 @@
+import cv2
 import pygame
 from interfaces import Environment
 import numpy as np
@@ -43,13 +44,14 @@ class Room():
 
 class ToyMR(Environment):
 
-    def __init__(self, map_file):
+    def __init__(self, map_file, max_num_actions=10000):
 
         self.rooms, self.starting_room, self.starting_cell, self.goal_room = self.parse_map_file(map_file)
         self.room = self.starting_room
         self.agent = self.starting_cell
         self.has_key = False
         self.terminal = False
+        self.max_num_actions = max_num_actions
 
         # useful game dimensions
         self.tile_size = 60
@@ -64,11 +66,12 @@ class ToyMR(Environment):
         self.screen = pygame.display.set_mode((self.room.size[0] * self.tile_size, self.room.size[1] * self.tile_size + self.hud_height))
 
         # load assets
-        self.key_image = pygame.image.load('mr_maps/mr_key.png').convert_alpha()
+        self.key_image = pygame.image.load('../mr_maps/mr_key.png').convert_alpha()
         self.key_image = pygame.transform.scale(self.key_image, (self.hud_height, self.hud_height))
 
         self.screen.fill(BACKGROUND_COLOR)
         self.draw()
+        self.generate_new_state()
 
     def parse_map_file(self, map_file):
         rooms = {}
@@ -170,15 +173,20 @@ class ToyMR(Environment):
 
         self.action_ticker += 1
 
+        self.generate_new_state()
+
         return start_state, action, reward, self.get_current_state(), self.is_current_state_terminal()
 
-    def get_current_state(self):
+    def generate_new_state(self):
         self.render_screen()
-        state = pygame.surfarray.array2d(self.screen)
+        image = pygame.surfarray.array3d(self.screen)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        self.state = cv2.resize(image, (84, 84))
 
-        return state
+    def get_current_state(self):
+        return [self.state]
 
-    def abstraction(self):
+    def abstraction(self, state):
         return self.room.loc[0], self.room.loc[1], self.room.key_collected, self.room.door_opened, self.has_key
 
     def get_actions_for_state(self, state):
@@ -189,11 +197,13 @@ class ToyMR(Environment):
         self.agent = self.starting_cell
         self.has_key = False
         self.terminal = False
+        self.action_ticker = 0
 
         pygame.display.update()
+        self.generate_new_state()
 
     def is_current_state_terminal(self):
-        return self.terminal
+        return self.terminal or self.action_ticker > self.max_num_actions
 
     def render_screen(self):
         # clear screen
