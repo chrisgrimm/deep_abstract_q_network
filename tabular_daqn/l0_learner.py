@@ -5,19 +5,40 @@ import tf_helpers as th
 from replay_memory import ReplayMemory
 
 
-class DQLearner(interfaces.LearningAgent):
+def construct_root_network(input, frame_history):
+    input = tf.image.convert_image_dtype(input, tf.float32)
+    with tf.variable_scope('c1'):
+        c1 = th.down_convolution(input, 8, 4, frame_history, 32, tf.nn.relu)
+    with tf.variable_scope('c2'):
+        c2 = th.down_convolution(c1, 4, 2, 32, 64, tf.nn.relu)
+    with tf.variable_scope('c3'):
+        c3 = th.down_convolution(c2, 3, 1, 64, 64, tf.nn.relu)
+        N = np.prod([x.value for x in c3.get_shape()[1:]])
+        c3 = tf.reshape(c3, [-1, N])
+    return c3
 
-    def __init__(self, dqn, num_actions, gamma=0.99, learning_rate=0.00025, replay_start_size=50000,
+def construct_heads_network(input, num_actions, num_abstract_states):
+    num_heads = num_abstract_states * num_abstract_states
+    with tf.variable_scope('fc1'):
+        fc1 = th.fully_connected(input, 512, tf.nn.relu)
+    with tf.variable_scope('fc2'):
+        q_values = th.fully_connected_shared_bias(fc1, num_actions * num_heads, lambda x: x)
+        q_values = tf.reshape(q_values, [-1, num_heads, num_actions])
+    return q_values
+
+
+class MultiHeadedDQLearner():
+
+    def __init__(self, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00025, replay_start_size=500,
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True):
-        self.dqn = dqn
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         self.sess = tf.Session(config=config)
         self.inp_actions = tf.placeholder(tf.float32, [None, num_actions])
-        inp_shape = [None] + list(self.dqn.get_input_shape()) + [frame_history]
-        inp_dtype = self.dqn.get_input_dtype()
+        inp_shape = [None, 84, 84, frame_history]
+        inp_dtype = 'uint8'
         assert type(inp_dtype) is str
         self.inp_frames = tf.placeholder(inp_dtype, inp_shape)
         self.inp_sp_frames = tf.placeholder(inp_dtype, inp_shape)
@@ -25,21 +46,30 @@ class DQLearner(interfaces.LearningAgent):
         self.inp_reward = tf.placeholder(tf.float32, [None])
         self.inp_mask = tf.placeholder(inp_dtype, [None, frame_history])
         self.inp_sp_mask = tf.placeholder(inp_dtype, [None, frame_history])
+        self.inp_q_choices = tf.placeholder(tf.int32, [None])
         self.gamma = gamma
+
         with tf.variable_scope('online'):
-            mask_shape = [-1] + [1]*len(self.dqn.get_input_shape()) + [frame_history]
+            mask_shape = [-1, 1, 1, frame_history]
             mask = tf.reshape(self.inp_mask, mask_shape)
             masked_input = self.inp_frames * mask
-            self.q_online = self.dqn.construct_q_network(masked_input)
+            self.root_online = construct_root_network(masked_input, frame_history)
+            self.qs_online = construct_heads_network(self.root_online, num_actions, num_abstract_states) # [batch_size, num_heads, num_actions]
+            self.q_online = tf.gather_nd(self.qs_online, tf.concat(1, [tf.expand_dims(tf.range(0, tf.shape(self.inp_q_choices)[0]), 1), tf.expand_dims(self.inp_q_choices, 1)]))
         with tf.variable_scope('target'):
-            mask_shape = [-1] + [1] * len(self.dqn.get_input_shape()) + [frame_history]
+            mask_shape = [-1, 1, 1, frame_history]
             sp_mask = tf.reshape(self.inp_sp_mask, mask_shape)
             masked_sp_input = self.inp_sp_frames * sp_mask
-            self.q_target = self.dqn.construct_q_network(masked_sp_input)
+            self.root_target = construct_root_network(masked_sp_input, frame_history)
+            self.qs_target = construct_heads_network(self.root_target, num_actions, num_abstract_states)
+            self.q_target = tf.gather_nd(self.qs_target, tf.concat(1, [tf.expand_dims(tf.range(0, tf.shape(self.inp_q_choices)[0]), 1), tf.expand_dims(self.inp_q_choices, 1)]))
 
         if double:
             with tf.variable_scope('online', reuse=True):
-                self.q_online_prime = self.dqn.construct_q_network(masked_sp_input)
+                double_root = construct_root_network(masked_sp_input, frame_history)
+                self.qs_online_prime = construct_heads_network(double_root, num_actions, num_abstract_states)
+                self.q_online_prime = tf.gather_nd(self.qs_online_prime, tf.concat(1, [tf.expand_dims(tf.range(0, tf.shape(self.inp_q_choices)[0]), 1), tf.expand_dims(self.inp_q_choices, 1)]))
+                print self.q_online_prime
             self.maxQ = tf.gather_nd(self.q_target, tf.transpose(
                 [tf.range(0, 32, dtype=tf.int32), tf.cast(tf.argmax(self.q_online_prime, axis=1), tf.int32)], [1, 0]))
         else:
@@ -58,13 +88,13 @@ class DQLearner(interfaces.LearningAgent):
         self.copy_op = th.make_copy_op('online', 'target')
         self.saver = tf.train.Saver(var_list=th.get_vars('online'))
 
-        self.replay_buffer = ReplayMemory(self.dqn.get_input_shape(), self.dqn.get_input_dtype(), replay_memory_size, frame_history)
+        self.replay_buffer = ReplayMemory((84, 84), 'uint8', replay_memory_size, frame_history)
         self.frame_history = frame_history
         self.replay_start_size = replay_start_size
-        self.epsilon = epsilon_start
+        self.epsilon = [epsilon_start] * num_abstract_states * num_abstract_states
         self.epsilon_min = epsilon_end
         self.epsilon_steps = epsilon_steps
-        self.epsilon_delta = (self.epsilon - self.epsilon_min) / self.epsilon_steps
+        self.epsilon_delta = (epsilon_start - self.epsilon_min) / self.epsilon_steps
         self.update_freq = update_freq
         self.target_copy_freq = target_copy_freq
         self.action_ticker = 1
@@ -80,7 +110,7 @@ class DQLearner(interfaces.LearningAgent):
         self.sess.run(self.copy_op)
 
     def update_q_values(self):
-        S1, A, R, S2, T, M1, M2 = self.replay_buffer.sample(self.batch_size)
+        S1, Alpha, A, R, S2, T, M1, M2 = self.replay_buffer.sample(self.batch_size)
         Aonehot = np.zeros((self.batch_size, self.num_actions), dtype=np.float32)
         Aonehot[range(len(A)), A] = 1
 
@@ -88,46 +118,57 @@ class DQLearner(interfaces.LearningAgent):
             [self.train_op, self.loss, self.q_online, self.maxQ, self.q_target, self.r, self.y, self.error, self.delta,
              self.g],
             feed_dict={self.inp_frames: S1, self.inp_actions: Aonehot,
+                       self.inp_q_choices: Alpha,
                        self.inp_sp_frames: S2, self.inp_reward: R,
                        self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2})
         return loss
 
-    def run_learning_episode(self, environment, max_episode_steps=100000):
+    def run_learning_episode(self, environment, dqn_number, initial_l1_state, goal_l1_state, abs_func, max_episode_steps=100000):
         episode_steps = 0
         total_reward = 0
+        episode_finished = False
         for steps in range(max_episode_steps):
             if environment.is_current_state_terminal():
                 break
 
             state = environment.get_current_state()
-            if np.random.uniform(0, 1) < self.epsilon:
+            if np.random.uniform(0, 1) < self.epsilon[dqn_number]:
                 action = np.random.choice(environment.get_actions_for_state(state))
             else:
-                action = self.get_action(state)
+                action = self.get_action(state, dqn_number)
 
             if self.replay_buffer.size() > self.replay_start_size:
-                self.epsilon = max(self.epsilon_min, self.epsilon - self.epsilon_delta)
+                self.epsilon[dqn_number] = max(self.epsilon_min, self.epsilon[dqn_number] - self.epsilon_delta)
 
             state, action, reward, next_state, is_terminal = environment.perform_action(action)
             total_reward += reward
-            self.replay_buffer.append(state[-1], action, reward, next_state[-1], is_terminal)
+
+            new_l1_state = abs_func(state)
+            if initial_l1_state != new_l1_state:
+                reward = 1 if new_l1_state == goal_l1_state else -1
+                episode_finished = True
+
+            self.replay_buffer.append(state[-1], dqn_number, action, reward, next_state[-1], is_terminal)
             if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
                 loss = self.update_q_values()
             if (self.action_ticker - self.replay_start_size) % self.target_copy_freq == 0:
                 self.sess.run(self.copy_op)
             self.action_ticker += 1
             episode_steps += 1
-        return episode_steps, total_reward
 
-    def get_action(self, state):
-        size = list(np.array(range(len(self.dqn.get_input_shape())))+1)
-        state_input = np.transpose(state, size + [0])
+            if episode_finished:
+                break
+
+        return episode_steps, total_reward, new_l1_state
+
+    def get_action(self, state, dqn_number):
+        state_input = np.transpose(state, [1, 2, 0])
 
         [q_values] = self.sess.run([self.q_online],
                                    feed_dict={self.inp_frames: [state_input],
-                                              self.inp_mask: np.ones((1, self.frame_history), dtype=np.float32)})
+                                              self.inp_mask: np.ones((1, self.frame_history), dtype=np.float32),
+                                              self.inp_q_choices: [dqn_number]})
         return np.argmax(q_values[0])
 
     def save_network(self, file_name):
         self.saver.save(self.sess, file_name)
-

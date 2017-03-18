@@ -12,13 +12,15 @@ class ReplayMemory(object):
         # S1 A R S2
         # to grab SARSA(0) -> S(0) A(0) R(0) S(1) T(0)
         self.screens = np.zeros([capacity] + list(self.input_shape), dtype=input_dtype)
+        self.alpha = np.zeros(capacity, dtype=np.uint8)
         self.action = np.zeros(capacity, dtype=np.uint8)
         self.reward = np.zeros(capacity, dtype=np.float32)
         self.terminated = np.zeros(capacity, dtype=np.bool)
         self.transposed_shape = range(1, len(self.input_shape)+1) + [0]
 
-    def append(self, S1, A, R, S2, T):
-        self.screens[self.t] = S1
+    def append(self, S1, Alpha, A, R, S2, T):
+        self.screens[self.t, :, :] = S1
+        self.alpha[self.t] = Alpha
         self.action[self.t] = A
         self.reward[self.t] = R
         self.terminated[self.t] = T
@@ -60,8 +62,9 @@ class ReplayMemory(object):
         a = self.action[index]
         r = self.reward[index]
         t = self.terminated[index]
+        alpha = self.alpha[index]
 
-        return S0, a, r, S1, t, mask, mask2
+        return S0, alpha, a, r, S1, t, mask, mask2
 
     def sample(self, num_samples):
         if not self.filled:
@@ -72,6 +75,7 @@ class ReplayMemory(object):
             idx = idx % self.capacity
 
         S0 = []
+        Alpha = []
         A = []
         R = []
         S1 = []
@@ -80,8 +84,9 @@ class ReplayMemory(object):
         M2 = []
 
         for sample_i in idx:
-            s0, a, r, s1, t, mask, mask2 = self.get_sample(sample_i)
+            s0, alpha, a, r, s1, t, mask, mask2 = self.get_sample(sample_i)
             S0.append(s0)
+            Alpha.append(alpha)
             A.append(a)
             R.append(r)
             S1.append(s1)
@@ -89,7 +94,7 @@ class ReplayMemory(object):
             M1.append(mask)
             M2.append(mask2)
 
-        return S0, A, R, S1, T, M1, M2
+        return S0, Alpha, A, R, S1, T, M1, M2
 
     def size(self):
         if self.filled:

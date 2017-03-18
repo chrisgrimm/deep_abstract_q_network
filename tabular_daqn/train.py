@@ -5,15 +5,16 @@ import tqdm
 import os
 
 import atari
-import dq_learner
 import atari_dqn
 import coin_game
+import toy_mr
 import wind_tunnel
 import daqn
 import tabular_dqn
 import tabular_coin_game
 # import daqn_clustering
 # import dq_learner_priors
+from tabular_daqn import rmax_learner
 
 num_steps = 50000000
 test_interval = 250000
@@ -66,7 +67,7 @@ def train(agent, env, test_epsilon, results_dir):
         step_num += episode_steps
 
         print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
-        end_time - start_time).total_seconds(), '\tL1Eps:', agent.epsilon#, '\tL0Eps:', agent.l0_learner.epsilon
+        end_time - start_time).total_seconds()
 
         # print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
         #     end_time - start_time).total_seconds(), '\tEps:', agent.epsilon
@@ -86,86 +87,19 @@ def train(agent, env, test_epsilon, results_dir):
             results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
             results_file.flush()
 
-        steps_until_vis_update -= episode_steps
-        if steps_until_vis_update <= 0:
-            steps_until_vis_update += vis_update_interval
-            env.visualize_l1_states(agent.sigma_query_probs, agent.inp_frames, agent.inp_mask, agent.sess)
-
-def train_dqn(env, num_actions):
-    results_dir = './results/dqn/coin_game'
-
-    training_epsilon = 0.1
-    test_epsilon = 0.05
-
-    frame_history = 1
-    dqn = atari_dqn.AtariDQN(frame_history, num_actions, shared_bias=False)
-    agent = dq_learner.DQLearner(dqn, num_actions, target_copy_freq=10000, epsilon_end=training_epsilon, double=False, frame_history=frame_history)
-    train(agent, env, test_epsilon, results_dir)
-
-def train_tabular_dqn(env, num_actions):
-    results_dir = './results/dqn/tab_coin_game_lr0.0025_rp10000'
-    training_epsilon = 0.1
-    test_epsilon = 0.05
-    n = 3
-    frame_history = 1
-    dqn = tabular_dqn.TabularDQN(n, frame_history, num_actions, shared_bias=False)
-    agent = dq_learner.DQLearner(dqn, num_actions, target_copy_freq=3000, epsilon_end=training_epsilon,
-                                 double=False, frame_history=frame_history, learning_rate=0.0025,
-                                 replay_start_size=10000, epsilon_steps=100000., replay_memory_size=10001
-                                 )
-    train(agent, env, test_epsilon, results_dir)
-
 
 def train_double_dqn(env, num_actions):
-    results_dir = './results/double_dqn/wind_tunnel'
+    results_dir = './results/double_dqn/%s' % game
 
     training_epsilon = 0.01
     test_epsilon = 0.001
 
     frame_history = 1
     dqn = atari_dqn.AtariDQN(frame_history, num_actions)
-    agent = dq_learner.DQLearner(dqn, num_actions, frame_history=frame_history, epsilon_end=training_epsilon)
+    agent = rmax_learner.RMaxLearner(env, env.abstraction, frame_history)
 
     train(agent, env, test_epsilon, results_dir)
 
-def train_daqn(env, num_actions):
-    results_dir = './results/daqn/coin_game_with_base_dqn_diff_vis_trained_reward_fixed'
-    env.results_dir = results_dir
-
-    training_epsilon = 0.1
-    test_epsilon = 0.05
-
-    # agent = daqn.L1_Learner(2, num_actions, abstraction_function=env.abstraction, epsilon_end=training_epsilon)
-    agent = daqn.L1_Learner(2, num_actions, learning_rate=0.00001, epsilon_end=training_epsilon, base_network_file='./base_net.ckpt')
-    agent.l0_learner.epsilon = 0.1
-
-    train(agent, env, test_epsilon, results_dir)
-#
-# def train_daqn_priors(env, num_actions):
-#     results_dir = './results/daqn_priors/coin_game'
-#     env.results_dir = results_dir
-#
-#     training_epsilon = 0.1
-#     test_epsilon = 0.05
-#
-#     agent = daqn_clustering.L1_Learner(2, num_actions, epsilon_end=training_epsilon)
-#
-#     train(agent, env, test_epsilon, results_dir)
-#
-# def train_dqn_priors(env, num_actions):
-#     results_dir = './results/priors/coin_game'
-#     env.results_dir = results_dir
-#
-#     training_epsilon = 0.1
-#     test_epsilon = 0.05
-#
-#     frame_history = 1
-#     dqn = dq_learner_priors.AtariDQN(frame_history, num_actions, shared_bias=False)
-#     agent = dq_learner_priors.DQLearner(dqn, num_actions, target_copy_freq=10000, epsilon_end=training_epsilon,
-#                                  frame_history=frame_history, restore_network_file='results/dqn/coin_game/coin_game_best_net.ckpt',
-#                                  epsilon_start=training_epsilon, replay_start_size=1000)
-#
-#     train(agent, env, test_epsilon, results_dir)
 
 def setup_atari_env():
     # create Atari environment
@@ -188,13 +122,11 @@ def setup_tabular_env():
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
+def setup_toy_mr_env():
+    env = toy_mr.ToyMR('../mr_maps/four_rooms.txt')
+    num_actions = len(env.get_actions_for_state(None))
+    return env, num_actions
 
-game = 'coin_game'
-# train_dqn(*setup_coin_env())
-# train_double_dqn(*setup_coin_env())
-train_daqn(*setup_coin_env())
-# train_daqn_priors(*setup_coin_env())
-# train_dqn_priors(*setup_coin_env())
-#train_tabular_dqn(*setup_tabular_env())
-# game = 'wind_tunnel'
-# train_double_dqn(*setup_wind_tunnel_env())
+
+game = 'toy_mr'
+train_double_dqn(*setup_toy_mr_env())
