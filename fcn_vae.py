@@ -75,9 +75,12 @@ class FcnVAE(object):
 		with tf.name_scope('loss'): 
 			self.x_reconstr_mean = tf.nn.sigmoid(tf.add(tf.matmul(self.h_2_g, 
 				self._weights([501, self.input_size])), self._bias([self.input_size])))
-			self.reconstr_loss = -tf.reduce_sum(self.x * tf.log(
-				self.x_reconstr_mean + 1e-7) + (1-self.x) * tf.log( 
-				1 - self.x_reconstr_mean + 1e-8), 1)
+			k = self.input_size
+			self.reconstr_loss = -k/2. * np.log(2*np.pi) - 0.5*(tf.reduce_sum(tf.square(self.x - self.x_reconstr_mean), reduction_indices=1))
+
+			#self.reconstr_loss = -tf.reduce_sum(self.x * tf.log(
+		#		self.x_reconstr_mean + 1e-7) + (1-self.x) * tf.log(
+	#			1 - self.x_reconstr_mean + 1e-8), 1)
 			self.latent_loss = -0.5 * tf.reduce_sum(
 				1 + self.z_log_sigma_sq - tf.square(
 					self.z_mean) - tf.exp(
