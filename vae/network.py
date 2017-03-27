@@ -32,7 +32,7 @@ def make_decoder(z):
     with tf.variable_scope('d1'):
         d1 = th.up_convolution(fc1, 5, 64, 32, tf.nn.relu)
     with tf.variable_scope('d2_mu'):
-        mu_x = th.up_convolution(d1, 5, 32, 1, lambda x: x)
+        mu_x = th.up_convolution(d1, 5, 32, 1, tf.nn.sigmoid)
     with tf.variable_scope('d2_sigma'):
         sigma_x = th.up_convolution(d1, 5, 32, 1, tf.nn.relu)
 
@@ -48,12 +48,12 @@ z = sigma_z * tf.random_normal([batch_size, encoding_size]) + mu_z
 with tf.variable_scope('decoder'):
     mu_x, sigma_x = make_decoder(z)
 
-term1 = 0.5 * tf.reduce_sum(1 + 2*tf.log(sigma_z + 10**-8) - tf.square(mu_z) - tf.square(sigma_z), reduction_indices=[1])
+term1 = (0.5 * tf.reduce_sum(1 + 2*tf.log(sigma_z + 10**-8) - tf.square(mu_z) - tf.square(sigma_z), reduction_indices=[1]))
 k = 84*84
-term2 = -k / 2.0 * np.log(2*np.pi) - 0.5*tf.reduce_sum(2*tf.log(sigma_x + 10**-8), reduction_indices=[1, 2, 3]) - tf.reduce_sum(0.5*tf.square(inp_image - mu_x)*(1.0 / (tf.square(sigma_x) + 10**-8)), [1, 2, 3])
+term2 = - tf.reduce_sum(0.5*tf.square(inp_image - mu_x), [1, 2, 3])
 loss = -tf.reduce_mean((term1 + term2), reduction_indices=0)
-
-train_op = tf.train.AdamOptimizer(learning_rate=0.001).minimize(loss)
+#loss = tf.reduce_mean(tf.square(inp_image - mu_x))
+train_op = tf.train.AdamOptimizer(learning_rate=0.0001).minimize(loss)
 
 saver = tf.train.Saver()
 
