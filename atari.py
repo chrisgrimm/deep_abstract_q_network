@@ -5,6 +5,7 @@ import cv2
 import datetime
 import copy
 import pygame
+import os
 
 class AtariEnvironment(interfaces.Environment):
 
@@ -121,3 +122,74 @@ class AtariEnvironment(interfaces.Environment):
             pygame.display.update()
 
 
+def get_action_from_user(action_mapping, special_actions):
+    while True:
+        action = raw_input('Action: ')
+        if action in special_actions:
+            return (action, None)
+        try:
+            action, mapped_action = action, action_mapping[action]
+            return (action, mapped_action)
+        except KeyError:
+            pass
+
+def handle_special_actions(data, game, action_mapping, action_recording, action):
+    if action == 'run_recording':
+        file_name = raw_input('Recording File: ')
+        recording = [int(x) for x in open(file_name, 'r').readlines()]
+        for action in recording:
+            game.perform_action(action)
+            action_recording.append(action)
+    elif action == 'set_savefile':
+        file_name = raw_input('Recording File: ')
+        data['savefile'] = file_name
+    elif action == 'save':
+        with open(data['savefile'], 'w') as f:
+            for a in action_recording:
+                f.write(str(a)+'\n')
+    elif action == 'restore':
+        game.reset_environment()
+        with open(data['savefile'], 'r') as f:
+            del action_recording[:]
+            recording = [int(x) for x in open(data['savefile'], 'r').readlines()]
+            for action in recording:
+                game.perform_action(action)
+                action_recording.append(action)
+    elif action == 'screenshot':
+        name = raw_input('Name:')
+        path = os.path.join(data['screenshot_dir'], name) + '.png'
+        print path
+        state = game.get_current_state()[-1]
+        cv2.imwrite(path, state)
+
+
+
+if __name__ == '__main__':
+    rom_name = './roms/montezuma_revenge.bin'
+    game = AtariEnvironment(rom_name, frame_skip=4)
+    actions = game.get_actions_for_state(None)
+    action_mapping = {'w': 2, 'a': 4, 'd': 3, ' ': 1, 's': 5, '': 0}
+    special_actions = ['run_recording', 'set_savefile', 'save', 'restore', 'screenshot']
+    data = {'savefile': 'default',
+            'screenshot_dir': './screenshots'}
+    if not os.path.isdir(data['screenshot_dir']):
+        os.mkdir(data['screenshot_dir'])
+    #action_mapping = dict(zip([str(x) for x in range(len(actions))], range(len(actions))))
+    print len(action_mapping)
+    buffer = ['', '']
+    action_recording = []
+    while True:
+        if game.is_current_state_terminal():
+            game.reset_environment()
+        action, mapped_action = get_action_from_user(action_mapping, special_actions)
+        if action in special_actions:
+            handle_special_actions(data, game, action_mapping, action_recording, action)
+        else:
+            buffer = buffer[1:] + [action]
+            if buffer == ['d', ' ']:
+                mapped_action = 11
+            if buffer == ['a', ' ']:
+                mapped_action = 12
+            print 'Performing', '-'+action+'-'
+            game.perform_action(actions[mapped_action])
+            action_recording.append(actions[mapped_action])

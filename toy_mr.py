@@ -1,4 +1,5 @@
 import cv2
+import datetime
 import pygame
 from interfaces import Environment
 import numpy as np
@@ -29,14 +30,28 @@ class Room():
     def __init__(self, loc, room_size):
         self.loc = loc
         self.size = room_size
-        self.reset_map = np.zeros(room_size, dtype=np.uint8)
-        self.map = self.reset_map
+        self.map = np.zeros(room_size, dtype=np.uint8)
 
         self.key_collected = False
         self.door_opened = False
 
+    def generate_lists(self):
+        self.walls = set()
+        self.keys = set()
+        self.doors = set()
+
+        for x in xrange(self.size[0]):
+            for y in xrange(self.size[1]):
+                if self.map[x, y] != 0:
+                    if self.map[x, y] == WALL_CODE:
+                        self.walls.add((x, y))
+                    elif self.map[x, y] == KEY_CODE:
+                        self.keys.add((x, y))
+                    elif self.map[x, y] == DOOR_CODE:
+                        self.doors.add((x, y))
+
     def reset(self):
-        self.map = self.reset_map
+        self.generate_lists()
 
         self.key_collected = False
         self.door_opened = False
@@ -54,9 +69,9 @@ class ToyMR(Environment):
         self.max_num_actions = max_num_actions
 
         # useful game dimensions
-        self.tile_size = 60
+        self.tile_size = 10
 
-        self.hud_height = 60
+        self.hud_height = 10
 
         self.action_ticker = 0
 
@@ -64,9 +79,11 @@ class ToyMR(Environment):
 
         # create screen
         self.screen = pygame.display.set_mode((self.room.size[0] * self.tile_size, self.room.size[1] * self.tile_size + self.hud_height))
+        self.last_refresh = datetime.datetime.now()
+        self.refresh_time = datetime.timedelta(milliseconds=1000 / 60)
 
         # load assets
-        self.key_image = pygame.image.load('./mr_maps/mr_key.png').convert_alpha()
+        self.key_image = pygame.image.load('../mr_maps/mr_key.png').convert_alpha()
         self.key_image = pygame.transform.scale(self.key_image, (self.hud_height, self.hud_height))
 
         self.screen.fill(BACKGROUND_COLOR)
@@ -88,6 +105,7 @@ class ToyMR(Environment):
                     r = 0
                 else:
                     if len(line) == 0:
+                        room.generate_lists()
                         rooms[room.loc] = room
                         r = -1
                     elif line == 'G':
@@ -107,6 +125,7 @@ class ToyMR(Environment):
                                 starting_cell = (c, r)
                         r += 1
         if r >= 0:
+            room.generate_lists()
             rooms[room.loc] = room
 
         if starting_room is None or starting_cell is None:
@@ -158,12 +177,21 @@ class ToyMR(Environment):
                 self.terminal = True
         else:
             # collision checks
-            cell_type = self.room.map[new_agent]
+            if new_agent in self.room.keys:
+                cell_type = KEY_CODE
+            elif new_agent in self.room.doors:
+                cell_type = DOOR_CODE
+            elif new_agent in self.room.walls:
+                cell_type = WALL_CODE
+            else:
+                cell_type = 0
+            #cell_type = self.room.map[new_agent]
             if cell_type == 0:
                 self.agent = new_agent
             elif cell_type == KEY_CODE:
                 if not self.has_key:
-                    self.room.map[new_agent] = 0
+                    assert new_agent in self.room.keys
+                    self.room.keys.remove(new_agent)
                     self.room.key_collected = True
                     self.has_key = True
 
@@ -172,7 +200,8 @@ class ToyMR(Environment):
                 self.agent = new_agent
             elif cell_type == DOOR_CODE:
                 if self.has_key:
-                    self.room.map[new_agent] = 0
+                    assert new_agent in self.room.doors
+                    self.room.doors.remove(new_agent)
                     self.room.door_opened = True
                     self.has_key = False
                     self.agent = new_agent
@@ -180,7 +209,7 @@ class ToyMR(Environment):
                     assert (self.room.loc, new_agent) in self.doors
                     self.doors[(self.room.loc, new_agent)] = False
 
-        self.draw()
+        self.refresh_gui()
 
         self.action_ticker += 1
 
@@ -238,15 +267,18 @@ class ToyMR(Environment):
                              (column * self.tile_size, self.room.size[0] * self.tile_size + self.hud_height))
 
         self.draw_circle(self.agent, AGENT_COLOR)
-        for x in range(self.room.size[0]):
-            for y in range(self.room.size[1]):
-                if self.room.map[x, y] != 0:
-                    if self.room.map[x, y] == WALL_CODE:
-                        self.draw_rect((x, y), WALL_COLOR)
-                    elif self.room.map[x, y] == KEY_CODE:
-                        self.draw_circle((x, y), KEY_COLOR)
-                    elif self.room.map[x, y] == DOOR_CODE:
-                        self.draw_rect((x, y), DOOR_COLOR)
+
+        # draw walls
+        for coord in self.room.walls:
+            self.draw_rect(coord, WALL_COLOR)
+
+        # draw key
+        for coord in self.room.keys:
+            self.draw_rect(coord, KEY_COLOR)
+
+        # draw doors
+        for coord in self.room.doors:
+            self.draw_rect(coord, DOOR_COLOR)
 
         # draw hud
         if self.has_key:
@@ -257,6 +289,12 @@ class ToyMR(Environment):
 
         # update the display
         pygame.display.update()
+
+    def refresh_gui(self):
+        current_time = datetime.datetime.now()
+        if (current_time - self.last_refresh) > self.refresh_time:
+            self.last_refresh = current_time
+            self.draw()
 
     def draw_circle(self, coord, color):
         rect = (coord[0] * self.tile_size, coord[1] * self.tile_size + self.hud_height, self.tile_size, self.tile_size)
@@ -299,6 +337,6 @@ if __name__ == "__main__":
                         print l1_state
 
                     if game.is_current_state_terminal():
-                        running = False
+                        game.reset_environment()
 
 

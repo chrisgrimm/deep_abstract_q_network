@@ -2,7 +2,7 @@ import interfaces
 import tensorflow as tf
 import numpy as np
 import tf_helpers as th
-from replay_memory import ReplayMemory
+from augmented_replay_memory import ReplayMemory
 
 
 def construct_root_network(input, frame_history):
@@ -22,14 +22,14 @@ def construct_heads_network(input, num_actions, num_abstract_states):
     with tf.variable_scope('fc1'):
         fc1 = th.fully_connected(input, 512, tf.nn.relu)
     with tf.variable_scope('fc2'):
-        q_values = th.fully_connected_shared_bias(fc1, num_actions * num_heads, lambda x: x)
+        q_values = th.fully_connected_multi_shared_bias(fc1, num_actions, num_heads, lambda x: x)
         q_values = tf.reshape(q_values, [-1, num_heads, num_actions])
     return q_values
 
 
 class MultiHeadedDQLearner():
 
-    def __init__(self, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00025, replay_start_size=500,
+    def __init__(self, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00025, replay_start_size=5000,
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True):
@@ -148,7 +148,7 @@ class MultiHeadedDQLearner():
                 reward = 1 if new_l1_state == goal_l1_state else -1
                 episode_finished = True
 
-            self.replay_buffer.append(state[-1], dqn_number, action, reward, next_state[-1], is_terminal)
+            self.replay_buffer.append(state[-1], dqn_number, action, reward, next_state[-1], episode_finished or is_terminal)
             if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
                 loss = self.update_q_values()
             if (self.action_ticker - self.replay_start_size) % self.target_copy_freq == 0:

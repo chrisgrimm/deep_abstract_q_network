@@ -10,6 +10,14 @@ def down_convolution(inp, kernel, stride, filter_in, filter_out, rectifier):
     return c
 
 
+def up_convolution(inp, kernel, filter_in, filter_out, rectifier):
+    [h, w, c] = [x.value for x in inp.get_shape()[1:]]
+    with tf.variable_scope('deconv_vars'):
+        w1 = tf.get_variable('w1', shape=[kernel, kernel, filter_out, filter_in], initializer=tf.contrib.layers.xavier_initializer())
+        b = tf.get_variable('b1', shape=[filter_out], initializer=tf.constant_initializer(0.0))
+    return rectifier(tf.nn.conv2d_transpose(inp, w1, [32, 2*h, 2*w, filter_out], [1, 2, 2, 1]) + b)
+
+
 def fully_connected(inp, neurons, rectifier):
     with tf.variable_scope('full_conv_vars'):
         w = tf.get_variable('w', [inp.get_shape()[1].value, neurons], initializer=tf.contrib.layers.xavier_initializer())
@@ -23,6 +31,14 @@ def fully_connected_shared_bias(inp, neurons, rectifier):
         w = tf.get_variable('w', [inp.get_shape()[1].value, neurons], initializer=tf.contrib.layers.xavier_initializer())
         b = tf.get_variable('b', [1], initializer=tf.constant_initializer(0.0))
     fc = rectifier(tf.matmul(inp, w) + tf.tile(b, [neurons]))
+    return fc
+
+def fully_connected_multi_shared_bias(inp, num_actions, num_heads, rectifier):
+    with tf.variable_scope('full_conv_vars'):
+        w = tf.get_variable('w', [inp.get_shape()[1].value, num_actions*num_heads], initializer=tf.contrib.layers.xavier_initializer())
+        b = tf.get_variable('b', [num_heads, 1], initializer=tf.constant_initializer(0.0))
+        b = tf.reshape(tf.tile(b, [1, num_actions]), [num_actions*num_heads])
+    fc = rectifier(tf.matmul(inp, w) + b)
     return fc
 
 

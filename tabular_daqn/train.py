@@ -7,6 +7,7 @@ import os
 import atari
 import atari_dqn
 import coin_game
+import dq_learner
 import toy_mr
 import wind_tunnel
 import daqn
@@ -38,7 +39,7 @@ def evaluate_agent_reward(steps, env, agent, epsilon):
         if np.random.uniform(0, 1) < epsilon:
             action = np.random.choice(env.get_actions_for_state(state))
         else:
-            action = agent.get_action(state)
+            action = agent.get_action(state, evaluation=True)
 
         state, action, reward, next_state, is_terminal = env.perform_action(action)
         total_reward += reward
@@ -88,18 +89,29 @@ def train(agent, env, test_epsilon, results_dir):
             results_file.flush()
 
 
-def train_double_dqn(env, num_actions):
-    results_dir = './results/double_dqn/%s' % game
+def train_rmax_daqn(env, num_actions):
+    results_dir = './results/rmax_daqn/%s_fixed_terminal' % game
 
     training_epsilon = 0.01
     test_epsilon = 0.001
 
     frame_history = 1
     dqn = atari_dqn.AtariDQN(frame_history, num_actions)
-    agent = rmax_learner.RMaxLearner(env, env.abstraction, frame_history)
+    agent = rmax_learner.RMaxLearner(env, env.abstraction, frame_history=frame_history)
 
     train(agent, env, test_epsilon, results_dir)
 
+def train_double_dqn(env, num_actions):
+    results_dir = './results/dqn/%s' % game
+
+    training_epsilon = 0.01
+    test_epsilon = 0.001
+
+    frame_history = 1
+    dqn = atari_dqn.AtariDQN(frame_history, num_actions)
+    agent = dq_learner.DQLearner(dqn, num_actions, frame_history=frame_history, epsilon_end=training_epsilon)
+
+    train(agent, env, test_epsilon, results_dir)
 
 def setup_atari_env():
     # create Atari environment
@@ -129,4 +141,5 @@ def setup_toy_mr_env():
 
 
 game = 'toy_mr'
-train_double_dqn(*setup_toy_mr_env())
+train_rmax_daqn(*setup_toy_mr_env())
+# train_double_dqn(*setup_toy_mr_env())

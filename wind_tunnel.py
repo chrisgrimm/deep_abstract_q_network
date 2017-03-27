@@ -115,7 +115,7 @@ class WindTunnel(Environment):
         self.render_screen()
         
         # update the display
-        data = pygame.image.save(self.screen, "directed_samples/%d-random.jpg" % self.image_num)
+        #data = pygame.image.save(self.screen, "directed_samples/%d-random.jpg" % self.image_num)
         self.image_num += 1
         pygame.display.update()
 

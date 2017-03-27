@@ -27,9 +27,9 @@ class MovingAverageTable(object):
         self.sa_count = dict()
         self.transition_table = dict()
         self.reward_table = dict()
+        self.terminal_table = dict()
         self.valid_transitions = dict()
         self.states = set()
-        self.terminal_states = set()
         self.actions = set()
 
     def insert(self, s, a, sp, r, terminal):
@@ -46,6 +46,10 @@ class MovingAverageTable(object):
             self.valid_transitions[(s, a)].add(sp)
         else:
             self.valid_transitions[(s, a)] = {sp}
+
+        if sp not in self.terminal_table:
+            self.terminal_table[sp] = deque(maxlen=self.moving_avg_len)
+        self.terminal_table[sp].append(float(terminal))
 
         if key not in self.transition_table:
             self.transition_table[key] = deque(maxlen=self.moving_avg_len)
@@ -64,20 +68,21 @@ class MovingAverageTable(object):
         else:
             return self.rmax
 
-    def is_terminal(self, s):
-        return s in self.terminal_states
+    def get_prob_terminal(self, s):
+        return np.mean(self.terminal_table[s])
 
 
 class RMaxLearner(interfaces.LearningAgent):
 
-    def __init__(self, env, abs_func, N=100, max_VI_iterations=100, VI_delta=0.01, gamma=0.9, rmax=10, max_num_abstract_states=10, frame_history=1):
+    def __init__(self, env, abs_func, N=1000, max_VI_iterations=100, VI_delta=0.01, gamma=0.9, rmax=10, max_num_abstract_states=10, frame_history=1):
         self.env = env
         self.abs_func = abs_func
         self.rmax = rmax
-        self.transition_table = MovingAverageTable(N, 100, self.rmax)
+        self.transition_table = MovingAverageTable(N, 1, self.rmax)
         self.max_VI_iterations = max_VI_iterations
         self.VI_delta = VI_delta
         self.values = dict()
+        self.evaluation_values = dict()
         self.gamma = gamma
 
         self.l0_learner = MultiHeadedDQLearner(len(self.env.get_actions_for_state(None)), max_num_abstract_states, frame_history=frame_history)
@@ -90,6 +95,7 @@ class RMaxLearner(interfaces.LearningAgent):
     def create_new_state(self, state):
         self.states.add(state)
         self.values[state] = 0
+        self.evaluation_values[state] = 0
         self.actions_for_state[state] = [L1Action(state, None, self.current_dqn_number)]
         self.neighbors[state] = []
         self.current_dqn_number += 1
@@ -104,31 +110,48 @@ class RMaxLearner(interfaces.LearningAgent):
 
         print 'Found new action: %s' % (new_action,)
 
-    def run_vi(self):
+    def run_vi(self, values, evaluation=False):
         new_values = dict()
         for i in xrange(self.max_VI_iterations):
             stop = True
             for s in self.transition_table.states:
-                new_values[s] = np.max(self.calculate_qs(s).values())
-                if np.abs(new_values[s] - self.values[s]) > self.VI_delta:
+                new_values[s] = np.max(self.calculate_qs(s, evaluation=evaluation).values())
+                if s in values and np.abs(new_values[s] - values[s]) > self.VI_delta:
                     stop = False
+            values = new_values.copy()
             if stop:
                 break
+        return values
 
-    def calculate_qs(self, s):
+    def calculate_qs(self, s, evaluation=False):
         qs = dict()
+        values = self.evaluation_values if evaluation else self.values
+        if evaluation:
+            values = self.evaluation_values
+        else:
+            values = self.values
         for a in self.actions_for_state[s]:
             val = 0
 
             key = (s, a)
-            if key in self.transition_table.valid_transitions:
+            dqn_eps = self.l0_learner.epsilon[a.dqn_number]
+            # when evaluating dont use rmax for underexplored states, for invalid transitions assign 0-value.
+            if (key in self.transition_table.valid_transitions) and (dqn_eps <= self.l0_learner.epsilon_min or evaluation):
+                Z = np.sum([self.transition_table.get_p(s, a, sp) for sp in self.transition_table.valid_transitions[key]])
                 for sp in self.transition_table.valid_transitions[key]:
-                    p = self.transition_table.get_p(s, a, sp)
+                    p = self.transition_table.get_p(s, a, sp) / Z
                     r = self.transition_table.get_r(s, a, sp)
-                    use_backup = (1 - self.transition_table.is_terminal(sp))
-                    val += p * (r + self.gamma * self.values[sp] * use_backup)
+
+                    if sp in values:
+                        use_backup = (1 - self.transition_table.get_prob_terminal(sp))
+                        val += p * (r + self.gamma * values[sp] * use_backup)
+                    else:
+                        val += p * r
             else:
-                val = self.rmax
+                if evaluation:
+                    val = 0
+                else:
+                    val = self.rmax
             qs[a] = val
         return qs
 
@@ -140,7 +163,7 @@ class RMaxLearner(interfaces.LearningAgent):
 
             s = self.abs_func(self.env.get_current_state())
 
-            a = self.get_action(s)
+            a = self.get_l1_action(s)
 
             assert s == a.initial_state
             print 'Executing action: %s -- eps: %.6f' % (a, self.l0_learner.epsilon[a.dqn_number])
@@ -160,13 +183,22 @@ class RMaxLearner(interfaces.LearningAgent):
             # add transition
             self.transition_table.insert(s, a, sp, R, environment.is_current_state_terminal())
 
-            # perform vi
-            self.run_vi()
+            # perform vi for both evaluation values and regular values.
+            self.values = self.run_vi(self.values.copy())
+            self.evaluation_values = self.run_vi(self.evaluation_values.copy(), evaluation=True)
 
         return total_episode_steps, total_reward
 
-    def get_action(self, state):
-        qs = self.calculate_qs(state)
+    def get_l1_action(self, state, evaluation=False):
+        qs = self.calculate_qs(state, evaluation=evaluation)
         keys, values = zip(*qs.items())
         action = np.random.choice(np.array(keys)[np.array(values) == np.max(values)])
         return action
+
+    def get_action(self, state, evaluation=False):
+        l1_state = self.abs_func(state)
+        l1_action = self.get_l1_action(l1_state, evaluation=evaluation)
+        return self.l0_learner.get_action(state, l1_action.dqn_number)
+
+    def save_network(self, file_name):
+        self.l0_learner.save_network(file_name)
