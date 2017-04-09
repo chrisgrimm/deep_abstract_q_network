@@ -6,12 +6,14 @@ import datetime
 import copy
 import pygame
 import os
+from embedding_dqn.abstraction_tools import montezumas_abstraction as ma
 
 class AtariEnvironment(interfaces.Environment):
 
-    def __init__(self, atari_rom, frame_skip=4, noop_max=30, terminate_on_end_life=False, random_seed=123,
+    def __init__(self, atari_rom, abstraction_tree=None, frame_skip=4, noop_max=30, terminate_on_end_life=False, random_seed=123,
                  frame_history_length=4, use_gui=True, max_num_frames=500000):
         self.ale = ALEInterface()
+        self.abstraction_tree = abstraction_tree
         self.ale.setInt('random_seed', random_seed)
         self.ale.setInt('frame_skip', 1)
         self.ale.setFloat('repeat_action_probability', 0.0)
@@ -42,6 +44,12 @@ class AtariEnvironment(interfaces.Environment):
         if (self.use_gui):
             self.gui_screen = pygame.display.set_mode((w, h))
 
+    def getRAM(self, ram=None):
+        return self.ale.getRAM(ram)
+
+    def abstraction(self, state):
+        return self.abstraction_tree.get_abstract_state()
+
     def _get_frame(self):
         self.ale.getScreenGrayscale(self.screen_image)
         image = self.screen_image.reshape([self.screen_height, self.screen_width, 1])
@@ -50,9 +58,15 @@ class AtariEnvironment(interfaces.Environment):
         return image
 
     def perform_action(self, onehot_index_action):
-        state = self.get_current_state()
         action = self.onehot_to_atari[onehot_index_action]
-        reward = self._act(action, self.frame_skip)
+        state, action, reward, next_state, self.is_terminal = self.perform_atari_action(action)
+        if self.abstraction_tree is not None:
+            self.abstraction_tree.update_state(next_state[-1])
+        return state, onehot_index_action, reward, next_state, self.is_terminal
+
+    def perform_atari_action(self, atari_action):
+        state = self.get_current_state()
+        reward = self._act(atari_action, self.frame_skip)
 
         if self.use_gui:
             self.refresh_gui()
@@ -61,7 +75,7 @@ class AtariEnvironment(interfaces.Environment):
         self.frame_history[-1] = np.max(self.last_two_frames, axis=0)
         next_state = self.get_current_state()
 
-        return state, onehot_index_action, reward, next_state, self.is_terminal
+        return state, atari_action, reward, next_state, self.is_terminal
 
     def _act(self, ale_action, repeat):
         reward = 0
@@ -93,8 +107,12 @@ class AtariEnvironment(interfaces.Environment):
         if self.terminate_on_end_life:
             if self.ale.game_over():
                 self.ale.reset_game()
+                if self.abstraction_tree is not None:
+                    self.abstraction_tree.reset()
         else:
             self.ale.reset_game()
+            if self.abstraction_tree is not None:
+                self.abstraction_tree.reset()
 
         self.current_lives = self.ale.lives()
 
@@ -168,6 +186,10 @@ if __name__ == '__main__':
     rom_name = './roms/montezuma_revenge.bin'
     game = AtariEnvironment(rom_name, frame_skip=4)
     actions = game.get_actions_for_state(None)
+    abstraction_tree = ma.abstraction_tree
+    abstraction_tree.update_state(game.get_current_state()[0])
+    l1_state = abstraction_tree.get_abstract_state()
+
     action_mapping = {'w': 2, 'a': 4, 'd': 3, ' ': 1, 's': 5, '': 0}
     special_actions = ['run_recording', 'set_savefile', 'save', 'restore', 'screenshot']
     data = {'savefile': 'default',
@@ -192,4 +214,12 @@ if __name__ == '__main__':
                 mapped_action = 12
             print 'Performing', '-'+action+'-'
             game.perform_action(actions[mapped_action])
+
+            abstraction_tree.update_state(game.get_current_state()[-1])
+            new_l1_state = abstraction_tree.get_abstract_state()
+
+            if new_l1_state != l1_state:
+                l1_state = new_l1_state
+                print l1_state
+
             action_recording.append(actions[mapped_action])

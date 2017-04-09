@@ -48,6 +48,8 @@ z = sigma_z * tf.random_normal([batch_size, encoding_size]) + mu_z
 with tf.variable_scope('decoder'):
     mu_x, sigma_x = make_decoder(z)
 
+z_variance = tf.sqrt(tf.reduce_sum(tf.square(mu_z), reduction_indices=1))
+
 term1 = (0.5 * tf.reduce_sum(1 + 2*tf.log(sigma_z + 10**-8) - tf.square(mu_z) - tf.square(sigma_z), reduction_indices=[1]))
 k = 84*84
 term2 = - tf.reduce_sum(0.5*tf.square(inp_image - mu_x), [1, 2, 3])
@@ -55,7 +57,7 @@ loss = -tf.reduce_mean((term1 + term2), reduction_indices=0)
 #loss = tf.reduce_mean(tf.square(inp_image - mu_x))
 train_op = tf.train.AdamOptimizer(learning_rate=0.0001).minimize(loss)
 
-saver = tf.train.Saver()
+saver = tf.train.Saver(var_list=th.get_vars('encoder', 'decoder'))
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
