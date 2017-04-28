@@ -1,6 +1,8 @@
 import atari
 import pygame
 import datetime
+
+from embedding_dqn import mr_environment
 from embedding_dqn.abstraction_tools import montezumas_abstraction as ma
 
 game_dir = './roms'
@@ -13,12 +15,15 @@ bitKeysMap = [
 
 
 if __name__ == "__main__":
-    # create Atari environment
-    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', frame_skip=1)
-    num_actions = len(env.ale.getMinimalActionSet())
     abstraction_tree = ma.abstraction_tree
+
+    # create Atari environment
+    # env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', frame_skip=1, terminate_on_end_life=True)
+    env = mr_environment.MREnvironment(game_dir + '/' + game + '.bin', frame_skip=1, terminate_on_end_life=True, abstraction_tree=abstraction_tree)
+    num_actions = len(env.ale.getMinimalActionSet())
+    abstraction_tree.setEnv(env)
     l1_state = abstraction_tree.get_abstract_state()
-    print ma.get_agent_sector(env)
+    print ma.abstraction_tree.get_agent_sector()
     right = False
     left = False
     up = False
@@ -32,6 +37,12 @@ if __name__ == "__main__":
 
     running = True
     while running:
+        if env.is_current_state_terminal():
+            print 'TERMINAL'
+            env.reset_environment()
+            abstraction_tree.update_state(env.get_current_state()[-1])
+            l1_state = abstraction_tree.get_abstract_state()
+            print l1_state
 
         # respond to human input
         for event in pygame.event.get():
@@ -75,7 +86,6 @@ if __name__ == "__main__":
 
             action = bitKeysMap[bitfield]
             env.perform_atari_action(action)
-            print ma.get_agent_sector(env)
 
             abstraction_tree.update_state(env.get_current_state()[-1])
             new_l1_state = abstraction_tree.get_abstract_state()

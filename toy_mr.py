@@ -3,6 +3,7 @@ import datetime
 import pygame
 from interfaces import Environment
 import numpy as np
+import os
 
 GRID_COLOR = (0, 0, 0)
 BACKGROUND_COLOR = (255, 255,  255)
@@ -23,6 +24,8 @@ WEST = 3
 WALL_CODE = 1
 KEY_CODE = 2
 DOOR_CODE = 3
+TRAP_CODE = 4
+AGENT_CODE = 5
 
 class Room():
 
@@ -32,13 +35,11 @@ class Room():
         self.size = room_size
         self.map = np.zeros(room_size, dtype=np.uint8)
 
-        self.key_collected = False
-        self.door_opened = False
-
     def generate_lists(self):
         self.walls = set()
         self.keys = set()
         self.doors = set()
+        self.traps = set()
 
         for x in xrange(self.size[0]):
             for y in xrange(self.size[1]):
@@ -49,12 +50,11 @@ class Room():
                         self.keys.add((x, y))
                     elif self.map[x, y] == DOOR_CODE:
                         self.doors.add((x, y))
+                    elif self.map[x, y] == TRAP_CODE:
+                        self.traps.add((x, y))
 
     def reset(self):
         self.generate_lists()
-
-        self.key_collected = False
-        self.door_opened = False
 
 
 class ToyMR(Environment):
@@ -64,7 +64,7 @@ class ToyMR(Environment):
         self.rooms, self.starting_room, self.starting_cell, self.goal_room, self.keys, self.doors = self.parse_map_file(map_file)
         self.room = self.starting_room
         self.agent = self.starting_cell
-        self.has_key = False
+        self.num_keys = 0
         self.terminal = False
         self.max_num_actions = max_num_actions
 
@@ -83,7 +83,7 @@ class ToyMR(Environment):
         self.refresh_time = datetime.timedelta(milliseconds=1000 / 60)
 
         # load assets
-        self.key_image = pygame.image.load('../mr_maps/mr_key.png').convert_alpha()
+        self.key_image = pygame.image.load(os.path.join(os.path.dirname(os.path.realpath(__file__)), './mr_maps/mr_key.png')).convert_alpha()
         self.key_image = pygame.transform.scale(self.key_image, (self.hud_height, self.hud_height))
 
         self.screen.fill(BACKGROUND_COLOR)
@@ -120,6 +120,8 @@ class ToyMR(Environment):
                             elif char == 'D':
                                 room.map[c, r] = DOOR_CODE
                                 doors[(room.loc, (c, r))] = True
+                            elif char == 'T':
+                                room.map[c, r] = TRAP_CODE
                             elif char == 'S':
                                 starting_room = room
                                 starting_cell = (c, r)
@@ -169,8 +171,20 @@ class ToyMR(Environment):
                 room_dy = 1
                 new_agent = (new_agent[0], 0)
 
-            self.room = self.rooms[(self.room.loc[0] + room_dx, self.room.loc[1] + room_dy)]
-            self.agent = new_agent
+            new_room = self.rooms[(self.room.loc[0] + room_dx, self.room.loc[1] + room_dy)]
+
+            # check intersecting with adjacent door
+            if new_agent in new_room.doors:
+                if self.num_keys > 0:
+                    new_room.doors.remove(new_agent)
+                    self.num_keys -= 1
+                    self.doors[(self.room.loc, new_agent)] = False
+
+                    self.room = new_room
+                    self.agent = new_agent
+            else:
+                self.room = new_room
+                self.agent = new_agent
 
             if self.room == self.goal_room:
                 reward = 1
@@ -183,31 +197,34 @@ class ToyMR(Environment):
                 cell_type = DOOR_CODE
             elif new_agent in self.room.walls:
                 cell_type = WALL_CODE
+            elif new_agent in self.room.traps:
+                cell_type = TRAP_CODE
             else:
                 cell_type = 0
-            #cell_type = self.room.map[new_agent]
+
             if cell_type == 0:
                 self.agent = new_agent
             elif cell_type == KEY_CODE:
-                if not self.has_key:
+                if self.keys[(self.room.loc, new_agent)]:
                     assert new_agent in self.room.keys
                     self.room.keys.remove(new_agent)
-                    self.room.key_collected = True
-                    self.has_key = True
+                    self.num_keys += 1
 
                     assert (self.room.loc, new_agent) in self.keys
                     self.keys[(self.room.loc, new_agent)] = False
                 self.agent = new_agent
             elif cell_type == DOOR_CODE:
-                if self.has_key:
+                if self.num_keys > 0:
                     assert new_agent in self.room.doors
                     self.room.doors.remove(new_agent)
-                    self.room.door_opened = True
-                    self.has_key = False
+                    self.num_keys -= 1
                     self.agent = new_agent
 
                     assert (self.room.loc, new_agent) in self.doors
                     self.doors[(self.room.loc, new_agent)] = False
+            elif cell_type == TRAP_CODE:
+                self.terminal = True
+                self.agent = new_agent
 
         self.refresh_gui()
 
@@ -235,7 +252,7 @@ class ToyMR(Environment):
     def reset_environment(self):
         self.room = self.starting_room
         self.agent = self.starting_cell
-        self.has_key = False
+        self.num_keys = 0
         self.terminal = False
         self.action_ticker = 0
 
@@ -280,9 +297,13 @@ class ToyMR(Environment):
         for coord in self.room.doors:
             self.draw_rect(coord, DOOR_COLOR)
 
+        # draw traps
+        for coord in self.room.traps:
+            self.draw_rect(coord, TRAP_COLOR)
+
         # draw hud
-        if self.has_key:
-            self.screen.blit(self.key_image, (0, 0))
+        for i in range(self.num_keys):
+            self.screen.blit(self.key_image, (i * (self.hud_height + 2), 0))
 
     def draw(self):
         self.render_screen()
@@ -305,7 +326,7 @@ class ToyMR(Environment):
         pygame.draw.rect(self.screen, color, rect)
 
 if __name__ == "__main__":
-    map_file = 'mr_maps/four_rooms.txt'
+    map_file = 'mr_maps/full_mr_map.txt'
     game = ToyMR(map_file)
 
     l1_state = game.abstraction(None)
@@ -313,6 +334,7 @@ if __name__ == "__main__":
 
     running = True
     while running:
+        game.refresh_gui()
 
         # respond to human input
         for event in pygame.event.get():

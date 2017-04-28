@@ -1,0 +1,13 @@
+Step: 250007 -- Mean reward: 0.00
+Step: 500044 -- Mean reward: 0.00
+Step: 750021 -- Mean reward: 0.00
+Step: 1001122 -- Mean reward: 0.00
+Step: 1251399 -- Mean reward: 0.00
+Step: 1501648 -- Mean reward: 0.00
+Step: 1751179 -- Mean reward: 0.00
+Step: 2000015 -- Mean reward: 0.00
+Step: 2250685 -- Mean reward: 0.00
+Step: 2502775 -- Mean reward: 0.00
+Step: 2757959 -- Mean reward: 0.00
+Step: 3000409 -- Mean reward: 0.00
+Step: 3250433 -- Mean reward: 0.00
