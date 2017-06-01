@@ -3,7 +3,7 @@ from collections import deque
 import numpy as np
 import tensorflow as tf
 
-from l0_learner import MultiHeadedDQLearner
+import l0_learner
 
 
 
@@ -35,6 +35,20 @@ class MovingAverageTable(object):
         self.valid_transitions = dict()
         self.states = set()
         self.actions = set()
+
+        self.success_table = dict()
+        self.success_moving_avg_len = 20
+
+    def insert_action_evaluation(self, action, is_success):
+        if action not in self.success_table:
+            self.success_table[action] = deque(maxlen=self.success_moving_avg_len)
+        self.success_table[action].append(is_success)
+
+    def get_success_rate(self, action):
+        if action not in self.success_table or \
+            len(self.success_table[action]) < self.success_moving_avg_len:
+            return 0
+        return np.mean(self.success_table[action])
 
     def insert(self, s, a, sp, r, terminal):
         self.states.add(s)
@@ -85,7 +99,7 @@ class RMaxLearner(interfaces.LearningAgent):
         # abs_vec_func produces an abstraction_vector (what goes into the embedding network) for a given state.
         self.abs_vec_func = abs_vec_func
         self.rmax = rmax
-        self.transition_table = MovingAverageTable(N, 1, self.rmax)
+        self.transition_table = MovingAverageTable(N, 1000, self.rmax)
         self.max_VI_iterations = max_VI_iterations
         self.VI_delta = VI_delta
         self.values = dict()
@@ -94,7 +108,7 @@ class RMaxLearner(interfaces.LearningAgent):
         self.value_update_counter = 0
         self.value_update_freq = 10
         with tf.device('/gpu:1'):
-            self.l0_learner = MultiHeadedDQLearner(abs_size, len(self.env.get_actions_for_state(None)), max_num_abstract_states, frame_history=frame_history)
+            self.l0_learner = l0_learner.MultiHeadedDQLearner(abs_size, len(self.env.get_actions_for_state(None)), max_num_abstract_states, frame_history=frame_history)
         self.actions_for_state = dict()
         self.neighbors = dict()
         self.states = set()
@@ -158,21 +172,22 @@ class RMaxLearner(interfaces.LearningAgent):
                         use_backup = (1 - self.transition_table.get_prob_terminal(sp))
                         val += p * (r + self.gamma * values[sp] * use_backup)
                     else:
-                        val += p * r
+                        val += p * (r + self.gamma * self.rmax)
             else:
                 if evaluation:
                     val = 0
                 else:
-                    val = self.rmax
+                    val = self.rmax / (1 - self.gamma)
             qs[a] = val
         return qs
 
     def get_reward(self, s, a, sp, evaluation=False):
-        if evaluation:
-            return self.transition_table.get_r(s, a, sp, evaluation=evaluation)
-        else:
-            prop = self.l0_learner.replay_buffer.abstract_action_proportions(self.abs_vec_func(s), self.abs_vec_func(sp))
-            return max(0, 1./len(self.transition_table.actions) - prop)
+        # if evaluation:
+        #     return self.transition_table.get_r(s, a, sp, evaluation=evaluation)
+        # else:
+        #     prop = self.l0_learner.replay_buffer.abstract_action_proportions(self.abs_vec_func(s), self.abs_vec_func(sp))
+        #     return max(0, 1./len(self.transition_table.actions) - prop)
+        return self.transition_table.get_r(s, a, sp, evaluation=evaluation)
 
     def run_learning_episode(self, environment):
         total_episode_steps = 0
@@ -195,14 +210,29 @@ class RMaxLearner(interfaces.LearningAgent):
             a = self.get_l1_action(s)
             dqn_tuple = (a.initial_state, a.goal_state)
             assert s == a.initial_state
-            print 'Executing action: %s -- eps: %.6f' % (a, self.l0_learner.epsilon.get(dqn_tuple, 1.0))
-            episode_steps, R, sp = self.l0_learner.run_learning_episode(self.env, a.initial_state_vec, a.goal_state_vec, s, a.goal_state, self.abs_func, self.abs_vec_func, max_episode_steps=1000)
+            if a.goal_state is not None and np.random.uniform(0, 1) < 0.1:
+                eval_action = True
+                epsilon = self.l0_learner.epsilon_min
+            else:
+                eval_action = False
+                epsilon = max(self.l0_learner.epsilon_min, 1 - self.transition_table.get_success_rate(a))
+            print 'Executing action: %s -- eps: %.6f' % (a, epsilon)
+            episode_steps, R, sp = self.l0_learner.run_learning_episode(self.env, a.initial_state_vec, a.goal_state_vec, s, a.goal_state, self.abs_func, self.abs_vec_func, epsilon, max_episode_steps=100)
+            if eval_action:
+                self.transition_table.insert_action_evaluation(a, a.goal_state == sp)
 
             # #TODO: REMOVE LATER
             # abs_state = self.env.abstraction_tree.get_abstract_state()
             # in_good_sectors = abs_state.sector in [(1, 2), (1, 1), (2, 1)]
             # if not in_good_sectors:
             #     sp = s
+
+            # Check if finished exploring
+            if a.goal_state == None:
+                # if self.l0_learner.epsilon[dqn_tuple] <= self.l0_learner.epsilon_min:
+                if (s, a) in self.transition_table.sa_count and \
+                                self.transition_table.sa_count[(s, a)] >= self.transition_table.num_conf:
+                    self.actions_for_state[a.initial_state].remove(a)
 
             total_episode_steps += episode_steps
             total_reward += R
@@ -228,13 +258,14 @@ class RMaxLearner(interfaces.LearningAgent):
     def get_l1_action(self, state, evaluation=False):
         qs = self.calculate_qs(state, evaluation=evaluation)
         keys, values = zip(*qs.items())
-        if evaluation:
-            action = np.random.choice(np.array(keys)[np.array(values) == np.max(values)])
-        else:
-            temp = 1.0
-            norm_values = (values - np.min(values)) / (np.max(values) - np.min(values))
-            distribution = np.exp(temp*norm_values) / np.sum(np.exp(temp*norm_values))
-            action = keys[np.random.choice(range(len(distribution)), p=distribution)]
+        # if evaluation:
+        #     action = np.random.choice(np.array(keys)[np.array(values) == np.max(values)])
+        # else:
+        #     temp = 1.0
+        #     norm_values = (values - np.min(values)) / (np.max(values) - np.min(values))
+        #     distribution = np.exp(temp*norm_values) / np.sum(np.exp(temp*norm_values))
+        #     action = keys[np.random.choice(range(len(distribution)), p=distribution)]
+        action = np.random.choice(np.array(keys)[np.array(values) == np.max(values)])
         return action
 
     def get_action(self, state, evaluation=False):

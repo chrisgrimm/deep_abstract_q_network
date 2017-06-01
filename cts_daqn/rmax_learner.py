@@ -168,11 +168,12 @@ class RMaxLearner(interfaces.LearningAgent):
         return qs
 
     def get_reward(self, s, a, sp, evaluation=False):
-        if evaluation:
-            return self.transition_table.get_r(s, a, sp, evaluation=evaluation)
-        else:
-            prop = self.l0_learner.replay_buffer.abstract_action_proportions(self.abs_vec_func(s), self.abs_vec_func(sp))
-            return max(0, 1./len(self.transition_table.actions) - prop)
+        return self.transition_table.get_r(s, a, sp, evaluation=evaluation)
+        # if evaluation:
+        #     return self.transition_table.get_r(s, a, sp, evaluation=evaluation)
+        # else:
+        #     prop = self.l0_learner.replay_buffer.abstract_action_proportions(self.abs_vec_func(s), self.abs_vec_func(sp))
+        #     return max(0, 1./len(self.transition_table.actions) - prop)
 
     def run_learning_episode(self, environment):
         total_episode_steps = 0

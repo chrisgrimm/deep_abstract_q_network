@@ -120,7 +120,8 @@ class DQLearner(interfaces.LearningAgent):
             total_reward += reward
             enc_s = self.encoding_func(environment)
 
-            log_p = self.cts.update(enc_s)
+            log_p = self.cts.log_prob(enc_s)
+            log_p_prime = self.cts.update(enc_s)
             p = np.exp(log_p)
             R_plus = np.sign(reward) + (1 - is_terminal) * (self.beta * np.power(p + 0.01, -0.5))
 

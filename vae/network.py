@@ -38,6 +38,30 @@ def make_decoder(z):
 
     return mu_x, sigma_x
 
+def make_encoder_fc(x):
+    with tf.variable_scope('fc1_mu'):
+        fc1 = th.fully_connected(tf.reshape(x, [-1, 11*11]), 50, tf.nn.elu)
+    with tf.variable_scope('enc_mu'):
+        mu_z = th.fully_connected(fc1, 10, lambda x: x)
+
+    with tf.variable_scope('fc1_sigma'):
+        fc1 = th.fully_connected(tf.reshape(x, [-1, 11 * 11]), 50, tf.nn.elu)
+    with tf.variable_scope('enc_sigma'):
+        sigma_z = th.fully_connected(fc1, 10, tf.square)
+    return mu_z, sigma_z
+
+def make_decoder_fc(z):
+    with tf.variable_scope('fc2_mu'):
+        fc2 = th.fully_connected(z, 50, tf.nn.elu)
+    with tf.variable_scope('dec_mu'):
+        mu_x = th.fully_connected(fc2, 11*11, lambda x: x)
+
+    with tf.variable_scope('fc2_sigma'):
+        fc2 = th.fully_connected(z, 50, tf.nn.elu)
+    with tf.variable_scope('dec_sigma'):
+        sigma_x = th.fully_connected(fc2, 11*11, lambda x: x)
+    return mu_x, sigma_x
+
 encoding_size = 50
 batch_size = 32
 inp_image = tf.placeholder(tf.float32, [None, 84, 84, 1])
@@ -50,7 +74,7 @@ with tf.variable_scope('decoder'):
 
 z_variance = tf.sqrt(tf.reduce_sum(tf.square(mu_z), reduction_indices=1))
 
-term1 = (0.5 * tf.reduce_sum(1 + 2*tf.log(sigma_z + 10**-8) - tf.square(mu_z) - tf.square(sigma_z), reduction_indices=[1]))
+term1 = (0.5 * tf.reduce_sum(1 - tf.square(mu_z) - 1, reduction_indices=[1]))
 k = 84*84
 term2 = - tf.reduce_sum(0.5*tf.square(inp_image - mu_x), [1, 2, 3])
 loss = -tf.reduce_mean((term1 + term2), reduction_indices=0)

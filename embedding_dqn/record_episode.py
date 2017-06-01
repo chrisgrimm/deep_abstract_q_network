@@ -26,16 +26,18 @@ from embedding_dqn import rmax_learner
 game_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../roms')
 
 def record_episode(steps, env, agent, epsilon, abs_func):
-    record_dir = 'recordings/1/'
+    record_dir = 'recordings/2/'
 
-    path = [[0., 0., 1., 1.],
-            [1., 0., 1., 1.],
-            [1., 1., 1., 1.],
-            [1., 1., -1., 1.],
-            [1., 0., -1., 1.],
-            [0., 0., -1., 1.],
-            [0., 0., -1., -1.],
-            [0., 1., -1., -1.]]
+    path = [abs_func((5, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1)),
+            abs_func((5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)),
+            abs_func((5, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1)),
+            abs_func((5, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1)),
+            abs_func((5, 1, 4, 1, 1, 1, 1, 1, 1, 1, 1)),
+            abs_func((5, 1, 4, 1, 1, 0, 1, 1, 1, 1, 1)),
+            abs_func((5, 1, 3, 1, 1, 0, 1, 1, 1, 1, 1)),
+            abs_func((5, 1, 2, 1, 1, 0, 1, 1, 1, 1, 1)),
+            abs_func((5, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1)),
+            abs_func((5, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1))]
 
     path_i = 0
     env.terminate_on_end_life = False
@@ -56,7 +58,7 @@ def record_episode(steps, env, agent, epsilon, abs_func):
         #     action = np.random.choice(env.get_actions_for_state(state))
         # else:
         #     action = agent.get_action(state, evaluation=True)
-        sigma = abs_func(env.abstraction(None))
+        sigma = abs_func(env.sector_abstraction(None))
         if sigma != path[path_i]:
             path_i += 1
             assert sigma == path[path_i]
@@ -69,6 +71,11 @@ def record_episode(steps, env, agent, epsilon, abs_func):
         episode_rewards.append(total_reward)
     return episode_rewards
 
+def sector_abs_vec_func(state):
+    onehot = np.zeros(shape=5)
+    onehot[state[2]] = 1
+    return [float(state[0]), float(state[1])] + onehot.tolist() + [1.0 if state[i] else -1.0 for i in range(3, len(state))]
+
 def train_rmax_daqn(env, num_actions):
     results_dir = './results/rmax_daqn/%s_fixed_terminal' % game
 
@@ -76,17 +83,18 @@ def train_rmax_daqn(env, num_actions):
     test_epsilon = 0.001
 
     frame_history = 1
+    abs_size = 15
     #dqn = atari_dqn.AtariDQN(frame_history, num_actions)
-    abs_vec_func = lambda state: [float(state[0]), float(state[1])] + [1.0 if state[i] else -1.0 for i in range(2, len(state))]
-    abs_size = 4
+    # abs_vec_func = lambda state: [float(state[0]), float(state[1])] + [1.0 if state[i] else -1.0 for i in range(2, len(state))]
+    # abs_size = 4
     #abs_vec_func = ma.montezuma_abstraction_vector
     #abs_size = 35 + 9
     l0_agent = l0_learner.MultiHeadedDQLearner(abs_size, num_actions, 10, restore_network_file='./toy_mr_net', replay_memory_size=1000, frame_history=frame_history)
 
-    record_episode(10000, env, l0_agent, 0.1, abs_vec_func)
+    record_episode(10000, env, l0_agent, 0.1, sector_abs_vec_func)
 
 def setup_toy_mr_env():
-    env = toy_mr.ToyMR('../mr_maps/four_rooms.txt')
+    env = toy_mr.ToyMR('../mr_maps/full_mr_map.txt')
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 

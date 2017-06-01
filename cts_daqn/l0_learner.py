@@ -4,9 +4,9 @@ import interfaces
 import tensorflow as tf
 import numpy as np
 import tf_helpers as th
-from embedding_replay_memory import ReplayMemory
+import replay_memory_pc as replay_memory
 
-from cts_daqn import pc_cts
+from cts import pc_cts
 
 from cts import toy_mr_encoder
 
@@ -52,10 +52,13 @@ def construct_dqn_with_embedding(input, abs_state1, abs_state2, frame_history, n
     return q_values
 
 def construct_dqn_with_embedding_2_layer(input, abs_state1, abs_state2, frame_history, num_actions):
-    embedding, weights = construct_embedding_network(abs_state1, abs_state2, 200, 200,
-                                                     512 * num_actions + 1)  # plus 1 for shared bias
-    w = tf.reshape(weights[:, 0:512 * num_actions], [-1, 512, num_actions])
-    b = tf.reshape(weights[:, 512 * num_actions:512 * num_actions + 1], [-1, 1])
+    #embedding, weights = construct_embedding_network(abs_state1, abs_state2, 200, 200,
+    #                                                 512 * num_actions + 1)  # plus 1 for shared bias
+    #w = tf.reshape(weights[:, 0:512 * num_actions], [-1, 512, num_actions])
+    #b = tf.reshape(weights[:, 512 * num_actions:512 * num_actions + 1], [-1, 1])
+    with tf.variable_scope('moop'):
+        w = tf.get_variable('w', shape=[512, num_actions], initializer=tf.contrib.layers.xavier_initializer())
+        b = tf.get_variable('b', shape=[1], initializer=tf.constant_initializer(0))
     input = tf.image.convert_image_dtype(input, tf.float32)
     with tf.variable_scope('c1'):
         c1 = th.down_convolution(input, 8, 4, frame_history, 32, tf.nn.relu)
@@ -68,7 +71,8 @@ def construct_dqn_with_embedding_2_layer(input, abs_state1, abs_state2, frame_hi
     with tf.variable_scope('fc1'):
         fc1 = th.fully_connected(c3, 512, tf.nn.relu)
     with tf.variable_scope('fc2'):
-        q_values = tf.reshape(tf.matmul(tf.reshape(fc1, [-1, 1, 512]), w), [-1, num_actions]) + b
+        #q_values = tf.reshape(tf.matmul(tf.reshape(fc1, [-1, 1, 512]), w), [-1, num_actions]) + b
+        q_values = tf.matmul(fc1, w) + b
     return q_values
 
 
@@ -99,7 +103,7 @@ def construct_embedding_network(abs_state1, abs_state2, hidden_size, embedding_s
 
 class MultiHeadedDQLearner():
 
-    def __init__(self, abs_size, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.000002, replay_start_size=50000,
+    def __init__(self, abs_size, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.000002, replay_start_size=500,
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True):
@@ -157,7 +161,7 @@ class MultiHeadedDQLearner():
         self.copy_op = th.make_copy_op('online', 'target')
         self.saver = tf.train.Saver(var_list=th.get_vars('online'))
 
-        self.replay_buffer = ReplayMemory((84, 84), abs_size, 'uint8', replay_memory_size, frame_history)
+        self.replay_buffer = replay_memory.ReplayMemory((84, 84), abs_size, 'uint8', replay_memory_size, frame_history)
         self.frame_history = frame_history
         self.replay_start_size = replay_start_size
         self.epsilon = dict()
@@ -179,27 +183,26 @@ class MultiHeadedDQLearner():
         self.sess.run(self.copy_op)
 
         self.cts = dict()
-        pc_cts.LocationDependentDensityModel((11, 12), lambda x, y: x, pc_cts.L_shaped_context)
         self.encoding_func = toy_mr_encoder.encode_toy_mr_state
         self.beta = 0.05
 
     def update_q_values(self):
-        S1, Sigma1, Sigma2, A, env_reward, S2, T, enc_s, M1, M2 = self.replay_buffer.sample(self.batch_size)
+        S1, Sigma1, Sigma2, A, R_plus, S2, T, enc_s, M1, M2 = self.replay_buffer.sample(self.batch_size)
         Aonehot = np.zeros((self.batch_size, self.num_actions), dtype=np.float32)
         Aonehot[range(len(A)), A] = 1
 
         # get random sample of neighbors for each Sigma1
         SigmaGoal = []
         R = []
-        for (terminal, sigma1, sigma2) in zip(T, Sigma1, Sigma2):
+        for (terminal, sigma1, sigma2, r_plus) in zip(T, Sigma1, Sigma2, R_plus):
             # TODO: SIGMA2 IS NOT SIGMA_GOAL!!!
             sigma_goal = random.sample(self.abs_neighbors[tuple(sigma1)], 1)[0]
             SigmaGoal.append(sigma_goal)
 
-            # augment reward of explore actions
+            # check if explore
             if tuple(sigma1) == sigma_goal:
-                p = self.cts[tuple(sigma1)].log_prob(enc_s)
-                r = (1 - T) * (self.beta * np.power(p + 0.01, -0.5))
+                # augment reward of explore actions
+                r = r_plus
             elif terminal:
                 r = -1
             elif tuple(sigma1) != tuple(sigma2):
@@ -235,6 +238,8 @@ class MultiHeadedDQLearner():
             self.abs_neighbors[key_init] = set()
             self.abs_neighbors[key_init].add(key_init)
 
+            self.cts[key_init] = pc_cts.LocationDependentDensityModel((11, 12), lambda x, y: x, pc_cts.L_shaped_context)
+
         for steps in range(max_episode_steps):
             if environment.is_current_state_terminal():
                 break
@@ -263,7 +268,12 @@ class MultiHeadedDQLearner():
             # else:
             #     reward = 0
 
-            self.replay_buffer.append(state[-1], initial_l1_state_vec, abs_vec_func(new_l1_state), action, env_reward, next_state[-1], episode_finished or is_terminal)
+            enc_s = self.encoding_func(environment)
+            log_p = self.cts[key_init].update(enc_s)
+            p = np.exp(log_p)
+            R_plus = (1 - is_terminal) * (self.beta * np.power(p + 0.01, -0.5))
+
+            self.replay_buffer.append(state[-1], initial_l1_state_vec, abs_vec_func(new_l1_state), action, R_plus, next_state[-1], enc_s, episode_finished or is_terminal)
             if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
                 loss = self.update_q_values()
             if (self.action_ticker - self.replay_start_size) % self.target_copy_freq == 0:

@@ -10,18 +10,18 @@ def down_convolution(inp, kernel, stride, filter_in, filter_out, rectifier):
     return c
 
 
-def up_convolution(inp, kernel, filter_in, filter_out, rectifier):
+def up_convolution(inp, kernel, filter_in, filter_out, rectifier, bias=0.0):
     [h, w, c] = [x.value for x in inp.get_shape()[1:]]
     with tf.variable_scope('deconv_vars'):
         w1 = tf.get_variable('w1', shape=[kernel, kernel, filter_out, filter_in], initializer=tf.contrib.layers.xavier_initializer())
-        b = tf.get_variable('b1', shape=[filter_out], initializer=tf.constant_initializer(0.0))
+        b = tf.get_variable('b1', shape=[filter_out], initializer=tf.constant_initializer(bias))
     return rectifier(tf.nn.conv2d_transpose(inp, w1, [32, 2*h, 2*w, filter_out], [1, 2, 2, 1]) + b)
 
 
-def fully_connected(inp, neurons, rectifier):
+def fully_connected(inp, neurons, rectifier, bias=0.0):
     with tf.variable_scope('full_conv_vars'):
         w = tf.get_variable('w', [inp.get_shape()[1].value, neurons], initializer=tf.contrib.layers.xavier_initializer())
-        b = tf.get_variable('b', [neurons], initializer=tf.constant_initializer(0.0))
+        b = tf.get_variable('b', [neurons], initializer=tf.constant_initializer(bias))
     fc = rectifier(tf.matmul(inp, w) + b)
     return fc
 

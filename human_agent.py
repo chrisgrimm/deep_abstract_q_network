@@ -6,7 +6,7 @@ from embedding_dqn import mr_environment
 from embedding_dqn.abstraction_tools import montezumas_abstraction as ma
 
 game_dir = './roms'
-game = 'montezuma_revenge'
+game = 'seaquest'
 
 bitKeysMap = [
         0, 1, 2, 10, 3, 11, 6, 14, 4, 12, 7, 15, -1, -1, -1, -1,

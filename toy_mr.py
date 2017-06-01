@@ -59,7 +59,7 @@ class Room():
 
 class ToyMR(Environment):
 
-    def __init__(self, map_file, max_num_actions=10000):
+    def __init__(self, map_file, max_num_actions=10000, use_gui=True):
 
         self.rooms, self.starting_room, self.starting_cell, self.goal_room, self.keys, self.doors = self.parse_map_file(map_file)
         self.room = self.starting_room
@@ -67,6 +67,8 @@ class ToyMR(Environment):
         self.num_keys = 0
         self.terminal = False
         self.max_num_actions = max_num_actions
+
+        self.use_gui = use_gui
 
         # useful game dimensions
         self.tile_size = 10
@@ -85,6 +87,8 @@ class ToyMR(Environment):
         # load assets
         self.key_image = pygame.image.load(os.path.join(os.path.dirname(os.path.realpath(__file__)), './mr_maps/mr_key.png')).convert_alpha()
         self.key_image = pygame.transform.scale(self.key_image, (self.hud_height, self.hud_height))
+
+        self.create_sectors()
 
         self.screen.fill(BACKGROUND_COLOR)
         self.draw()
@@ -133,7 +137,7 @@ class ToyMR(Environment):
         if starting_room is None or starting_cell is None:
             raise Exception('You must specify a starting location and goal room')
         return rooms, starting_room, starting_cell, goal_room, keys, doors
-
+    #@profile
     def perform_action(self, action):
 
         start_state = self.get_current_state()
@@ -224,16 +228,32 @@ class ToyMR(Environment):
                     self.doors[(self.room.loc, new_agent)] = False
             elif cell_type == TRAP_CODE:
                 self.terminal = True
-                self.agent = new_agent
-
-        self.refresh_gui()
 
         self.action_ticker += 1
 
-        self.generate_new_state()
+        if self.use_gui:
+            self.refresh_gui()
+            self.generate_new_state()
 
         return start_state, action, reward, self.get_current_state(), self.is_current_state_terminal()
 
+    def create_sectors(self):
+        self.sectors = dict()
+        self.sectors[(5, 1)] = []
+
+        self.sectors[(5, 1)].append(self.create_rect_set(0,0,11,3))
+        self.sectors[(5, 1)].append(self.create_rect_set(4,3,3,5))
+        self.sectors[(5, 1)].append(self.create_rect_set(7,3,4,8))
+        self.sectors[(5, 1)].append(self.create_rect_set(4,8,3,3))
+        self.sectors[(5, 1)].append(self.create_rect_set(0,3,4,8))
+
+    def create_rect_set(self, min_x, min_y, w, h):
+        rect = set()
+        for x in range(min_x, min_x + w):
+            for y in range(min_y, min_y + h):
+                rect.add((x, y))
+        return rect
+    #@profile
     def generate_new_state(self):
         self.render_screen()
         image = pygame.surfarray.array3d(self.screen)
@@ -241,7 +261,25 @@ class ToyMR(Environment):
         self.state = cv2.resize(image, (84, 84))
 
     def get_current_state(self):
-        return [self.state]
+        if self.use_gui:
+            return [self.state]
+        else:
+            return None
+
+    def sector_abstraction(self, state):
+        sector = -1
+        if self.room.loc in self.sectors:
+            sectors = self.sectors[self.room.loc]
+
+            for i, sector_set in enumerate(sectors):
+                if self.agent in sector_set:
+                    sector = i
+                    break
+            assert sector != -1
+        else:
+            sector = 0
+
+        return self.room.loc + (sector,) + tuple(np.array(self.keys.values(), dtype=int)) + tuple(np.array(self.doors.values(), dtype=int))
 
     def abstraction(self, state):
         return self.room.loc + tuple(self.keys.values()) + tuple(self.doors.values())
@@ -265,8 +303,9 @@ class ToyMR(Environment):
         for key, val in self.doors.iteritems():
             self.doors[key] = True
 
-        pygame.display.update()
-        self.generate_new_state()
+        if self.use_gui:
+            pygame.display.update()
+            self.generate_new_state()
 
     def is_current_state_terminal(self):
         return self.terminal or self.action_ticker > self.max_num_actions
@@ -304,6 +343,80 @@ class ToyMR(Environment):
         # draw hud
         for i in range(self.num_keys):
             self.screen.blit(self.key_image, (i * (self.hud_height + 2), 0))
+
+    def render_screen_generated(self, name, walls, keys, doors, traps, agents):
+        # clear screen
+        self.screen.fill(BACKGROUND_COLOR)
+
+        # loop through each row
+        for row in range(self.room.size[1] + 1):
+            pygame.draw.line(self.screen, GRID_COLOR, (0, row * self.tile_size + self.hud_height),
+                             (self.room.size[1] * self.tile_size, row * self.tile_size + self.hud_height))
+        for column in range(self.room.size[0] + 1):
+            pygame.draw.line(self.screen, GRID_COLOR, (column * self.tile_size, self.hud_height),
+                             (column * self.tile_size, self.room.size[0] * self.tile_size + self.hud_height))
+
+        # draw walls
+        for coord in walls:
+            self.draw_rect(coord, WALL_COLOR)
+
+        # draw key
+        for coord in keys:
+            self.draw_rect(coord, KEY_COLOR)
+
+        # draw doors
+        for coord in doors:
+            self.draw_rect(coord, DOOR_COLOR)
+
+        # draw traps
+        for coord in traps:
+            self.draw_rect(coord, TRAP_COLOR)
+
+        # draw traps
+        for coord in agents:
+            self.draw_rect(coord, AGENT_COLOR)
+
+        pygame.image.save(self.screen, './' + name + '.png')
+
+
+    def draw_probability_screen(self, name, positions, intensities):
+        # clear screen
+        self.screen.fill(BACKGROUND_COLOR)
+
+        # loop through each row
+        for row in range(self.room.size[1] + 1):
+            pygame.draw.line(self.screen, GRID_COLOR, (0, row * self.tile_size + self.hud_height),
+                             (self.room.size[1] * self.tile_size, row * self.tile_size + self.hud_height))
+        for column in range(self.room.size[0] + 1):
+            pygame.draw.line(self.screen, GRID_COLOR, (column * self.tile_size, self.hud_height),
+                             (column * self.tile_size, self.room.size[0] * self.tile_size + self.hud_height))
+
+        for position, intensity in zip(positions, intensities):
+            self.draw_rect(position, intensity)
+        #self.draw_circle(self.agent, AGENT_COLOR)
+
+        # draw walls
+        for coord in self.room.walls:
+            self.draw_rect(coord, WALL_COLOR)
+
+        # draw key
+        for coord in self.room.keys:
+            self.draw_rect(coord, WALL_COLOR)
+
+        # draw doors
+        for coord in self.room.doors:
+            self.draw_rect(coord, WALL_COLOR)
+
+        # draw traps
+        for coord in self.room.traps:
+            self.draw_rect(coord, WALL_COLOR)
+
+        # draw hud
+        for i in range(self.num_keys):
+            self.screen.blit(self.key_image, (i * (self.hud_height + 2), 0))
+
+        pygame.image.save(self.screen, './'+name+'.png')
+
 
     def draw(self):
         self.render_screen()

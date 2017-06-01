@@ -86,10 +86,10 @@ def train(agent, env, test_epsilon, results_dir):
             results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
             results_file.flush()
 
-        steps_until_vis_update -= episode_steps
-        if steps_until_vis_update <= 0:
-            steps_until_vis_update += vis_update_interval
-            env.visualize_l1_states(agent.sigma_query_probs, agent.inp_frames, agent.inp_mask, agent.sess)
+        # steps_until_vis_update -= episode_steps
+        # if steps_until_vis_update <= 0:
+        #     steps_until_vis_update += vis_update_interval
+        #     env.visualize_l1_states(agent.sigma_query_probs, agent.inp_frames, agent.inp_mask, agent.sess)
 
 def train_dqn(env, num_actions):
     results_dir = './results/dqn/coin_game'
@@ -97,7 +97,7 @@ def train_dqn(env, num_actions):
     training_epsilon = 0.1
     test_epsilon = 0.05
 
-    frame_history = 1
+    frame_history = 4
     dqn = atari_dqn.AtariDQN(frame_history, num_actions, shared_bias=False)
     agent = dq_learner.DQLearner(dqn, num_actions, target_copy_freq=10000, epsilon_end=training_epsilon, double=False, frame_history=frame_history)
     train(agent, env, test_epsilon, results_dir)
@@ -189,10 +189,11 @@ def setup_tabular_env():
     return env, num_actions
 
 
-game = 'coin_game'
+game = 'pong'
+train_dqn(*setup_atari_env())
 # train_dqn(*setup_coin_env())
 # train_double_dqn(*setup_coin_env())
-train_daqn(*setup_coin_env())
+# train_daqn(*setup_coin_env())
 # train_daqn_priors(*setup_coin_env())
 # train_dqn_priors(*setup_coin_env())
 #train_tabular_dqn(*setup_tabular_env())

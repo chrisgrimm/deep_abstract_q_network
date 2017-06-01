@@ -30,6 +30,7 @@ vis_update_interval = 10000
 
 def evaluate_agent_reward(steps, env, agent, epsilon):
     agent.evaluation_values = agent.run_vi(agent.evaluation_values.copy(), evaluation=True)
+    num_explored_states = len(agent.transition_table.states)
 
     env.terminate_on_end_life = False
     env.reset_environment()
@@ -50,7 +51,7 @@ def evaluate_agent_reward(steps, env, agent, epsilon):
         total_reward += reward
     if not episode_rewards:
         episode_rewards.append(total_reward)
-    return episode_rewards
+    return episode_rewards, num_explored_states
 
 def train(agent, env, test_epsilon, results_dir):
     # open results file
@@ -81,7 +82,7 @@ def train(agent, env, test_epsilon, results_dir):
         if steps_until_test <= 0:
             steps_until_test += test_interval
             print 'Evaluating network...'
-            episode_rewards = evaluate_agent_reward(test_frames, env, agent, test_epsilon)
+            episode_rewards, num_explored_states = evaluate_agent_reward(test_frames, env, agent, test_epsilon)
             mean_reward = np.mean(episode_rewards)
 
             if mean_reward > best_eval_reward:
@@ -89,7 +90,7 @@ def train(agent, env, test_epsilon, results_dir):
                 agent.save_network('%s/%s_best_net.ckpt' % (results_dir, game))
 
             print 'Mean Reward:', mean_reward, 'Best:', best_eval_reward
-            results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
+            results_file.write('Step: %d -- Mean reward: %.2f -- Num Explored: %s\n' % (step_num, mean_reward, num_explored_states))
             results_file.flush()
 
 
@@ -103,6 +104,27 @@ def train_rmax_daqn(env, num_actions):
     #dqn = atari_dqn.AtariDQN(frame_history, num_actions)
     # abs_vec_func = lambda state: [float(state[0]), float(state[1])] + [1.0 if state[i] else -1.0 for i in range(2, len(state))]
     # abs_size = 10
+    frame_history = 4
+    abs_vec_func = ma.montezuma_abstraction_vector
+    abs_size = 35 + 9
+    agent = rmax_learner.RMaxLearner(abs_size, env, abs_vec_func, env.abstraction, frame_history=frame_history)
+
+    train(agent, env, test_epsilon, results_dir)
+
+def sector_abs_vec_func(state):
+    onehot = np.zeros(shape=5)
+    onehot[state[2]] = 1
+    return [float(state[0]), float(state[1])] + onehot.tolist() + [1.0 if state[i] else -1.0 for i in range(3, len(state))]
+
+def train_rmax_daqn_sectors(env, num_actions):
+    results_dir = './results/rmax_daqn/%s_mr_concat_abstract' % game
+
+    training_epsilon = 0.01
+    test_epsilon = 0.001
+
+    # frame_history = 1
+    # abs_vec_func = sector_abs_vec_func
+    # abs_size = 15
     frame_history = 4
     abs_vec_func = ma.montezuma_abstraction_vector
     abs_size = 35 + 9
@@ -144,7 +166,7 @@ def setup_tabular_env():
     return env, num_actions
 
 def setup_toy_mr_env():
-    env = toy_mr.ToyMR('../mr_maps/full_mr_map.txt')
+    env = toy_mr.ToyMR('../mr_maps/full_mr_map.txt', use_gui=True)
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
@@ -158,6 +180,6 @@ def setup_mr_env():
 
 game = 'mr_100000'
 #train_rmax_daqn(*setup_mr_env())
-train_rmax_daqn(*setup_mr_env())
+# train_rmax_daqn(*setup_mr_env())
 # train_double_dqn(*setup_toy_mr_env())
-# train_rmax_daqn(*setup_toy_mr_env())
+train_rmax_daqn_sectors(*setup_mr_env())

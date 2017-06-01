@@ -14,7 +14,8 @@ import tabular_dqn
 import tabular_coin_game
 # import daqn_clustering
 # import dq_learner_priors
-from cts import dq_learner_pc
+import rmax_learner
+import dq_learner_pc
 
 num_steps = 50000000
 test_interval = 250000
@@ -51,7 +52,7 @@ def train(agent, env, test_epsilon, results_dir):
     # open results file
     results_fn = '%s/%s_results.txt' % (results_dir, game)
     if not os.path.isdir(results_dir):
-        os.mkdir(results_dir)
+        os.makedirs(results_dir)
     results_file = open(results_fn, 'w')
 
     step_num = 0
@@ -67,7 +68,7 @@ def train(agent, env, test_epsilon, results_dir):
         step_num += episode_steps
 
         print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
-        end_time - start_time).total_seconds(), '\tL1Eps:', agent.epsilon#, '\tL0Eps:', agent.l0_learner.epsilon
+        end_time - start_time).total_seconds()
 
         # print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
         #     end_time - start_time).total_seconds(), '\tEps:', agent.epsilon
@@ -110,6 +111,24 @@ def train_double_dqn(env, num_actions):
 
     train(agent, env, test_epsilon, results_dir)
 
+
+def train_rmax_daqn(env, num_actions):
+    results_dir = './results/rmax_daqn/%s_fixed_terminal' % game
+
+    training_epsilon = 0.01
+    test_epsilon = 0.001
+
+    frame_history = 1
+    abs_vec_func = lambda state: [float(state[0]), float(state[1])] + [1.0 if state[i] else -1.0 for i in range(2, len(state))]
+    abs_size = 10
+    # frame_history = 4
+    # abs_vec_func = ma.montezuma_abstraction_vector
+    # abs_size = 35 + 9
+    agent = rmax_learner.RMaxLearner(abs_size, env, abs_vec_func, env.abstraction, frame_history=frame_history)
+
+    train(agent, env, test_epsilon, results_dir)
+
+
 def setup_atari_env():
     # create Atari environment
     env = atari.AtariEnvironment(game_dir + '/' + game + '.bin')
@@ -124,4 +143,5 @@ def setup_toy_mr_env():
 
 game = 'toy_mr'
 # train_dqn(*setup_coin_env())
-train_double_dqn(*setup_toy_mr_env())
+# train_double_dqn(*setup_toy_mr_env())
+train_rmax_daqn(*setup_toy_mr_env())

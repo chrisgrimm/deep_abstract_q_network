@@ -93,7 +93,7 @@ class ReplayMemory(object):
         M2 = []
 
         for sample_i in idx:
-            s0, a, sigma1, sigma2, r, s1, t, enc_s2, mask, mask2 = self.get_sample(sample_i)
+            s0, sigma1, sigma2, a, r, s1, t, enc_s2, mask, mask2 = self.get_sample(sample_i)
             S0.append(s0)
             A.append(a)
             Sigma1.append(sigma1)
