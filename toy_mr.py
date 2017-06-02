@@ -59,9 +59,13 @@ class Room():
 
 class ToyMR(Environment):
 
-    def __init__(self, map_file, max_num_actions=10000, use_gui=True):
+    def __init__(self, map_file, abstraction_file=None, max_num_actions=10000, use_gui=True):
 
         self.rooms, self.starting_room, self.starting_cell, self.goal_room, self.keys, self.doors = self.parse_map_file(map_file)
+        if abstraction_file is not None:
+            self.rooms_abs, self.rooms_abs_numeric_map = self.parse_abs_file(abstraction_file)
+        else:
+            self.rooms_abs, self.rooms_abs_numeric_map = None, None
         self.room = self.starting_room
         self.agent = self.starting_cell
         self.num_keys = 0
@@ -93,6 +97,38 @@ class ToyMR(Environment):
         self.screen.fill(BACKGROUND_COLOR)
         self.draw()
         self.generate_new_state()
+
+    def parse_abs_file(self, abs_file):
+        r = -1
+        rooms = {}
+        with open(abs_file) as f:
+            lines = f.read().splitlines()
+        for line in lines:
+            print '-%s-' % line, 'len:', len(line)
+            if r == -1:
+                room_x, room_y, room_w, room_h = map(int, line.split(' '))
+                room = {}
+                curr_loc = (room_x, room_y)
+                r = 0
+            else:
+                if len(line) == 0:
+                    rooms[curr_loc] = room
+                    r = -1
+                elif line == 'G':
+                    goal_room = room
+                else:
+                    for c, char in enumerate(line):
+                        room[c, r] = char
+                    r += 1
+        # construct numeric representation of each sector
+        rooms_numeric_repr = {}
+        for room_xy, room_sector_dict in rooms.items():
+            numeric_repr = {val: i for i, val in enumerate(set(room_sector_dict.values()))}
+            rooms_numeric_repr[room_xy] = numeric_repr
+        # rooms contains a mapping from coordinates to abstraction symbols (can be characters or numbers)
+        # rooms_numeric_repr contains a convenience mapping from symbols to integers. (useful in case you need more
+        # than 10 abstract states for a room.
+        return rooms, rooms_numeric_repr
 
     def parse_map_file(self, map_file):
         rooms = {}
@@ -267,19 +303,25 @@ class ToyMR(Environment):
             return None
 
     def sector_abstraction(self, state):
-        sector = -1
-        if self.room.loc in self.sectors:
-            sectors = self.sectors[self.room.loc]
-
-            for i, sector_set in enumerate(sectors):
-                if self.agent in sector_set:
-                    sector = i
-                    break
-            assert sector != -1
-        else:
-            sector = 0
-
+        if self.rooms_abs is None:
+            raise Exception('Cant use sector abstraction if no abstraction file is provided to ToyMR constructor.')
+        sector = self.rooms_abs_numeric_map[self.room.loc][self.rooms_abs[self.room.loc][self.agent]]
         return self.room.loc + (sector,) + tuple(np.array(self.keys.values(), dtype=int)) + tuple(np.array(self.doors.values(), dtype=int))
+
+    #def sector_abstraction(self, state):
+    #    sector = -1
+    #    if self.room.loc in self.sectors:
+    #        sectors = self.sectors[self.room.loc]
+    #
+    #        for i, sector_set in enumerate(sectors):
+    #            if self.agent in sector_set:
+    #                sector = i
+    #                break
+    #        assert sector != -1
+    #    else:
+    #        sector = 0
+    #
+    #    return self.room.loc + (sector,) + tuple(np.array(self.keys.values(), dtype=int)) + tuple(np.array(self.doors.values(), dtype=int))
 
     def abstraction(self, state):
         return self.room.loc + tuple(self.keys.values()) + tuple(self.doors.values())
@@ -440,9 +482,10 @@ class ToyMR(Environment):
 
 if __name__ == "__main__":
     map_file = 'mr_maps/full_mr_map.txt'
-    game = ToyMR(map_file)
+    abs_file = 'mr_maps/full_mr_map_abs.txt'
+    game = ToyMR(map_file, abstraction_file=abs_file)
 
-    l1_state = game.abstraction(None)
+    l1_state = game.sector_abstraction(None)
     print l1_state
 
     running = True
@@ -466,7 +509,7 @@ if __name__ == "__main__":
                 if action != -1:
                     game.perform_action(action)
 
-                    new_l1_state = game.abstraction(None)
+                    new_l1_state = game.sector_abstraction(None)
                     if new_l1_state != l1_state:
                         l1_state = new_l1_state
                         print l1_state
