@@ -4,6 +4,7 @@ import pygame
 from interfaces import Environment
 import numpy as np
 import os
+from embedding_dqn.rmax_learner import AbstractState
 
 GRID_COLOR = (0, 0, 0)
 BACKGROUND_COLOR = (255, 255,  255)
@@ -55,6 +56,37 @@ class Room():
 
     def reset(self):
         self.generate_lists()
+
+
+room_mapping = [(5,1), (4,1), (6,1), (3,2), (4,2), (5,2), (6,2),
+                (7,2), (2,3), (3,3), (4,3), (5,3), (6,3), (7,3),
+                (8,3), (1,4), (2,4), (3,4), (4,4), (5,4), (6,4),
+                (7,4), (8,4), (9,4)]
+room_mapping = dict([(x, i) for i, x in enumerate(room_mapping)])
+
+class ToyMRAbstractState(AbstractState):
+
+    def __init__(self, room_tuple, sector_num, key_states, door_states):
+        self.room_tuple = room_tuple
+        self.sector_num = sector_num
+        self.key_states = key_states
+        self.door_states = door_states
+
+        onehot_room = [0]*len(room_mapping)
+        onehot_room[room_mapping[room_tuple]] = 1
+        state_vector = []
+
+
+    def get_key_lazy(self):
+        return self.room_tuple + (self.sector_num,) + self.key_states + self.door_states
+
+
+    def get_vector_lazy(self):
+        onehot_room = [0] * len(room_mapping)
+        onehot_room[room_mapping[self.room_tuple]] = 1
+        posneg_key_states = [1 if x == True else -1 for x in self.key_states]
+        posneg_door_states = [1 if x == True else -1 for x in self.door_states]
+        return onehot_room + [self.sector_num,] + posneg_key_states + posneg_door_states
 
 
 class ToyMR(Environment):
