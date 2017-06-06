@@ -10,6 +10,8 @@ import l0_learner
 
 class L1Action(object):
     def __init__(self, initial_state, goal_state, initial_state_vec, goal_state_vec):
+        assert initial_state is None or issubclass(initial_state, AbstractState)
+        assert goal_state is None or issubclass(goal_state, AbstractState)
         self.initial_state = initial_state
         self.goal_state = goal_state
         self.initial_state_vec = initial_state_vec
@@ -20,6 +22,35 @@ class L1Action(object):
             return '%s EXPLORE' % (self.initial_state,)
         else:
             return '%s -> %s' % (self.initial_state, self.goal_state)
+
+    def get_key(self):
+        initial_state_key = () if self.initial_state is None else self.initial_state.get_key()
+        goal_state_key = () if self.goal_state is None else self.goal_state.get_key()
+        return (initial_state_key, goal_state_key)
+
+    def __hash__(self):
+        return hash(self.get_key())
+
+    def __eq__(self, other):
+        if not isinstance(other, L1Action):
+            return False
+        else:
+            return self.get_key() == other.get_key()
+
+class AbstractState(object):
+
+    def get_key(self):
+        raise NotImplemented
+
+    def __hash__(self):
+        return hash(self.get_key())
+
+    def __eq__(self, other):
+        if not issubclass(other, AbstractState):
+            return False
+        else:
+            return self.get_key() == other.get_key()
+
 
 class MovingAverageTable(object):
 
@@ -39,7 +70,7 @@ class MovingAverageTable(object):
         self.success_table = dict()
         self.success_moving_avg_len = 20
 
-    def insert_action_evaluation(self, action, is_success):
+    def insertatari_action_action_evaluation(self, action, is_success):
         if action not in self.success_table:
             self.success_table[action] = deque(maxlen=self.success_moving_avg_len)
         self.success_table[action].append(is_success)
