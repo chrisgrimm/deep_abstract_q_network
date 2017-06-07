@@ -1,2 +1,0 @@
-model_checkpoint_path: "mr_100000_best_net.ckpt"
-all_model_checkpoint_paths: "mr_100000_best_net.ckpt"

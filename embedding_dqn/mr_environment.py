@@ -2,13 +2,17 @@ import atari
 
 class MREnvironment(atari.AtariEnvironment):
 
+    def set_abstraction(self, abstraction):
+        self.abstraction = abstraction
+
     def reset_environment(self):
         # no-ops once the agent is about to get murked.
         # loop will hang if we dont check that lives > 0
-        while self.abstraction_tree.bout_to_get_murked() and self.current_lives > 0:
+        while not self.abstraction.should_perform_sector_check(self.getRAM()) and not self.ale.game_over():
             self.perform_action(0)
 
         super(MREnvironment, self).reset_environment()
+        self.abstraction.reset()
 
     # def perform_action(self, onehot_index_action):
     #     state, atari_action, reward, next_state, is_terminal = super(MREnvironment, self).perform_action(onehot_index_action)

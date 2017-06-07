@@ -119,7 +119,7 @@ class MultiHeadedDQLearner():
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
-                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=0.2):
+                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=1.0):
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         config.allow_soft_placement = True

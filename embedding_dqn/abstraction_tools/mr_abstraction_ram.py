@@ -12,7 +12,7 @@ global_object_locs = [  # stored as (byte, bit)
     (0, 2),  # Door R Room 1
     (0, 3),  # Door L Room 1
     (2, 2),  # Door R Room 5
-    (0, 3),  # Door L Room 5
+    (2, 3),  # Door L Room 5
     (8, 2),  # Door R Room 17
     (8, 3),  # Door L Room 17
 ]
@@ -26,9 +26,13 @@ class MRAbstraction(object):
 
     def __init__(self):
         self.global_state = [0] * len(global_object_locs)
+        self.env = None
         self.current_room = 1
         self.agent_sector = (1, 2)
-        self.env = None
+        self.old_should_check = True
+
+    def reset(self):
+        self.old_should_check = True
 
     def set_env(self, env):
         self.env = env
@@ -42,16 +46,16 @@ class MRAbstraction(object):
         death_counter_active = ram[55] > 0
         death_sprite_active = ram[54] == 6
         is_walking_or_on_stairs = ram[53] in [0, 10, 8, 18]
-        # also need landing because there is a frame where the agent is walking when it jumps on the rope
-        landing = ram[91] > 0
-        should_check = (is_walking_or_on_stairs and not landing and not is_falling and not death_counter_active and not death_sprite_active)
+        new_should_check = (is_walking_or_on_stairs and not is_falling and not death_counter_active and not death_sprite_active)
+        should_check = new_should_check and self.old_should_check
+        self.old_should_check = new_should_check
         return should_check
-
-    def bout_to_get_murked(self, ram):
-        is_falling = ram[88] > 0
-        death_counter_active = ram[55] > 0
-        death_sprite_active = ram[54] == 6
-        return is_falling or death_counter_active or death_sprite_active
+    #
+    # def bout_to_get_murked(self, ram):
+    #     is_falling = ram[88] > 0
+    #     death_counter_active = ram[55] > 0
+    #     death_sprite_active = ram[54] == 6
+    #     return is_falling or death_counter_active or death_sprite_active
 
     def update_agent_sector(self, ram):
         if self.should_perform_sector_check(ram):

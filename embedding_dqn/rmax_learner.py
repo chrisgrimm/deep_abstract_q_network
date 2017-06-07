@@ -243,6 +243,8 @@ class RMaxLearner(interfaces.LearningAgent):
         total_episode_steps = 0
         total_reward = 0
 
+        x = not self.env.abstraction.should_perform_sector_check(self.env.getRAM())
+
         while not self.env.is_current_state_terminal():
 
             s = self.abs_func(self.env.get_current_state())

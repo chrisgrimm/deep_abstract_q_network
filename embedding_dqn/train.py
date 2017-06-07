@@ -106,6 +106,7 @@ def train_rmax_daqn(env, num_actions):
     # abs_size = 10
     frame_history = 4
     abs = mr_abs.MRAbstraction()
+    env.set_abstraction(abs)
     abs.set_env(env)
     abs_func = abs.abstraction_function
     abs_size = 24 + 9 + 10
@@ -176,9 +177,7 @@ def setup_toy_mr_env():
     return env, num_actions
 
 def setup_mr_env():
-    from embedding_dqn.abstraction_tools import montezumas_abstraction as ma
-    env = mr_environment.MREnvironment(game_dir + '/' + 'montezuma_revenge' + '.bin', abstraction_tree=ma.abstraction_tree)
-    ma.abstraction_tree.setEnv(env)
+    env = mr_environment.MREnvironment(game_dir + '/' + 'montezuma_revenge' + '.bin')
     num_actions = len(env.ale.getMinimalActionSet())
     return env, num_actions
 

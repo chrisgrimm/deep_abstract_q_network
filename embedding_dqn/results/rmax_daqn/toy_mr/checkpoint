@@ -1,2 +1,0 @@
-model_checkpoint_path: "toy_mr_best_net.ckpt"
-all_model_checkpoint_paths: "toy_mr_best_net.ckpt"

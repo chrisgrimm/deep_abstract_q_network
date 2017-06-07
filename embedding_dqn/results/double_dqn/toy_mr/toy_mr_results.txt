@@ -1,2 +1,0 @@
-Step: 254159 -- Mean reward: 0.00
-Step: 506366 -- Mean reward: 0.00
