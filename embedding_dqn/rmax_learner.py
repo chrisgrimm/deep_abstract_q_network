@@ -37,11 +37,11 @@ class L1Action(object):
         else:
             return self.get_key() == other.get_key()
 
+
 class AbstractState(object):
 
     def get_key_lazy(self):
         raise NotImplemented
-
 
     def get_vector_lazy(self):
         raise NotImplemented
@@ -63,10 +63,8 @@ class AbstractState(object):
     def get_vector_size(self):
         raise NotImplemented
 
-
     def __hash__(self):
         return hash(self.get_key())
-
 
     def __eq__(self, other):
         if not issubclass(other, AbstractState):
