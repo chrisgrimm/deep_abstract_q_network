@@ -143,7 +143,7 @@ class MultiHeadedDQLearner():
         self.inp_abs_state_goal = tf.placeholder(tf.float32, [None, abs_size])
         self.abs_neighbors = dict()
         self.gamma = gamma
-        q_constructor = construct_dqn_with_subgoal_embedding
+        q_constructor = construct_dqn_with_embedding_2_layer
         with tf.variable_scope('online'):
             mask_shape = [-1, 1, 1, frame_history]
             mask = tf.reshape(self.inp_mask, mask_shape)
@@ -257,7 +257,7 @@ class MultiHeadedDQLearner():
                        self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2})
         return loss
 
-    def run_learning_episode(self, environment, initial_l1_state_vec, goal_l1_state_vec, initial_l1_state, goal_l1_state, abs_func, abs_vec_func, epsilon, max_episode_steps=100000):
+    def run_learning_episode(self, environment, initial_l1_state_vec, goal_l1_state_vec, initial_l1_state, goal_l1_state, abs_func, epsilon, max_episode_steps=100000):
         episode_steps = 0
         total_reward = 0
         episode_finished = False
@@ -304,9 +304,7 @@ class MultiHeadedDQLearner():
 
             new_l1_state = abs_func(state)
             if initial_l1_state != new_l1_state:
-                self.abs_neighbors[key_init].add(tuple(abs_vec_func(new_l1_state)))
-
-                episode_finished = True
+                self.abs_neighbors[key_init].add(tuple(new_l1_state.get_vector()))
 
             if initial_l1_state != new_l1_state or is_terminal:
                 reward = 1 if new_l1_state == goal_l1_state else -1
@@ -315,13 +313,13 @@ class MultiHeadedDQLearner():
                 reward = 0
 
             if self.use_mmc:
-                sars = (state[-1], initial_l1_state_vec, abs_vec_func(new_l1_state),
+                sars = (state[-1], initial_l1_state_vec, new_l1_state.get_vector(),
                         goal_l1_state_vec, action, reward, next_state[-1], is_terminal or episode_finished)
                 self.mmc_tracker.append(*sars)
                 if is_terminal or episode_finished:
                     self.mmc_tracker.flush()
             else:
-                sars = (state[-1], initial_l1_state_vec, abs_vec_func(new_l1_state),
+                sars = (state[-1], initial_l1_state_vec, new_l1_state.get_vector(),
                         goal_l1_state_vec, action, reward, 0, next_state[-1], is_terminal or episode_finished)
                 self.replay_buffer.append(*sars)
 

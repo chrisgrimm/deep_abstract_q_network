@@ -47,9 +47,6 @@ class AtariEnvironment(interfaces.Environment):
     def getRAM(self, ram=None):
         return self.ale.getRAM(ram)
 
-    def abstraction(self, state):
-        return self.abstraction_tree.get_abstract_state()
-
     def _get_frame(self):
         self.ale.getScreenGrayscale(self.screen_image)
         image = self.screen_image.reshape([self.screen_height, self.screen_width, 1])
@@ -122,6 +119,9 @@ class AtariEnvironment(interfaces.Environment):
 
         self.frame_history = copy.copy(self.zero_history_frames)
         self.frame_history[-1] = np.max(self.last_two_frames, axis=0)
+
+        if self.use_gui:
+            self.refresh_gui()
 
     def is_current_state_terminal(self):
         return self.is_terminal

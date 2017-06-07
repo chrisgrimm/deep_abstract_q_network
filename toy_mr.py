@@ -64,22 +64,17 @@ room_mapping = [(5,1), (4,1), (6,1), (3,2), (4,2), (5,2), (6,2),
                 (7,4), (8,4), (9,4)]
 room_mapping = dict([(x, i) for i, x in enumerate(room_mapping)])
 
+
 class ToyMRAbstractState(AbstractState):
 
     def __init__(self, room_tuple, sector_num, key_states, door_states):
         self.room_tuple = room_tuple
         self.sector_num = sector_num
-        self.key_states = key_states
-        self.door_states = door_states
-
-        onehot_room = [0]*len(room_mapping)
-        onehot_room[room_mapping[room_tuple]] = 1
-        state_vector = []
-
+        self.key_states = tuple(key_states)
+        self.door_states = tuple(door_states)
 
     def get_key_lazy(self):
         return self.room_tuple + (self.sector_num,) + self.key_states + self.door_states
-
 
     def get_vector_lazy(self):
         onehot_room = [0] * len(room_mapping)

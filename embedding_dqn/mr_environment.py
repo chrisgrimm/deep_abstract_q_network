@@ -6,7 +6,7 @@ class MREnvironment(atari.AtariEnvironment):
         # no-ops once the agent is about to get murked.
         # loop will hang if we dont check that lives > 0
         while self.abstraction_tree.bout_to_get_murked() and self.current_lives > 0:
-           self.perform_action(0)
+            self.perform_action(0)
 
         super(MREnvironment, self).reset_environment()
 

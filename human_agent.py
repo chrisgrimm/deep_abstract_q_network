@@ -4,9 +4,10 @@ import datetime
 
 from embedding_dqn import mr_environment
 from embedding_dqn.abstraction_tools import montezumas_abstraction as ma
+from embedding_dqn.abstraction_tools import mr_abstraction_ram as mr_abs
 
 game_dir = './roms'
-game = 'seaquest'
+game = 'montezuma_revenge'
 
 bitKeysMap = [
         0, 1, 2, 10, 3, 11, 6, 14, 4, 12, 7, 15, -1, -1, -1, -1,
@@ -15,15 +16,15 @@ bitKeysMap = [
 
 
 if __name__ == "__main__":
-    abstraction_tree = ma.abstraction_tree
+    abstraction = mr_abs.MRAbstraction()
 
     # create Atari environment
     # env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', frame_skip=1, terminate_on_end_life=True)
-    env = mr_environment.MREnvironment(game_dir + '/' + game + '.bin', frame_skip=1, terminate_on_end_life=True, abstraction_tree=abstraction_tree)
+    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', frame_skip=1, terminate_on_end_life=True)
     num_actions = len(env.ale.getMinimalActionSet())
-    abstraction_tree.setEnv(env)
-    l1_state = abstraction_tree.get_abstract_state()
-    print ma.abstraction_tree.get_agent_sector()
+    abstraction.update_state(env.getRAM())
+    l1_state = abstraction.get_abstract_state()
+
     right = False
     left = False
     up = False
@@ -40,8 +41,8 @@ if __name__ == "__main__":
         if env.is_current_state_terminal():
             print 'TERMINAL'
             env.reset_environment()
-            abstraction_tree.update_state(env.get_current_state()[-1])
-            l1_state = abstraction_tree.get_abstract_state()
+            abstraction.update_state(env.getRAM())
+            l1_state = abstraction.get_abstract_state()
             print l1_state
 
         # respond to human input
@@ -87,8 +88,8 @@ if __name__ == "__main__":
             action = bitKeysMap[bitfield]
             env.perform_atari_action(action)
 
-            abstraction_tree.update_state(env.get_current_state()[-1])
-            new_l1_state = abstraction_tree.get_abstract_state()
+            abstraction.update_state(env.getRAM())
+            new_l1_state = abstraction.get_abstract_state()
 
             if new_l1_state != l1_state:
                 l1_state = new_l1_state

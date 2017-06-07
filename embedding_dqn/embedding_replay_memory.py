@@ -15,17 +15,19 @@ class ReplayMemory(object):
         self.screens = np.zeros([capacity] + list(self.input_shape), dtype=input_dtype)
         self.sigma1 = np.zeros([capacity, abs_size], dtype=np.float32)
         self.sigma2 = np.zeros([capacity, abs_size], dtype=np.float32)
+        self.sigma_goal = np.zeros([capacity, abs_size], dtype=np.float32)
         self.action = np.zeros(capacity, dtype=np.uint8)
         self.reward = np.zeros(capacity, dtype=np.float32)
         self.terminated = np.zeros(capacity, dtype=np.bool)
         self.transposed_shape = range(1, len(self.input_shape)+1) + [0]
 
-    def append(self, S1, Sigma1, Sigma2, A, R, S2, T):
+    def append(self, S1, Sigma1, Sigma2, SigmaGoal, A, R, S2, T):
         if self.filled:
             self.abstract_action_numerator_table[(tuple(self.sigma1[self.t, :]), tuple(self.sigma2[self.t, :]))] -= 1
         self.screens[self.t, :, :] = S1
         self.sigma1[self.t, :] = Sigma1
         self.sigma2[self.t, :] = Sigma2
+        self.sigma_goal[self.t, :] = SigmaGoal
         if (tuple(Sigma1), tuple(Sigma2)) in self.abstract_action_numerator_table:
             self.abstract_action_numerator_table[(tuple(Sigma1), tuple(Sigma2))] += 1
         else:
@@ -81,8 +83,9 @@ class ReplayMemory(object):
         t = self.terminated[index]
         sigma1 = self.sigma1[index]
         sigma2 = self.sigma2[index]
+        sigma_goal = self.sigma_goal[index]
 
-        return S0, sigma1, sigma2, a, r, S1, t, mask, mask2
+        return S0, sigma1, sigma2, sigma_goal, a, r, S1, t, mask, mask2
 
     def sample(self, num_samples):
         if not self.filled:
@@ -95,6 +98,7 @@ class ReplayMemory(object):
         S0 = []
         Sigma1 = []
         Sigma2 = []
+        SigmaGoal = []
         A = []
         R = []
         S1 = []
@@ -103,10 +107,11 @@ class ReplayMemory(object):
         M2 = []
 
         for sample_i in idx:
-            s0, sigma1, sigma2, a, r, s1, t, mask, mask2 = self.get_sample(sample_i)
+            s0, sigma1, sigma2, sigma_goal, a, r, s1, t, mask, mask2 = self.get_sample(sample_i)
             S0.append(s0)
             Sigma1.append(sigma1)
             Sigma2.append(sigma2)
+            SigmaGoal.append(sigma_goal)
             A.append(a)
             R.append(r)
             S1.append(s1)
@@ -114,7 +119,7 @@ class ReplayMemory(object):
             M1.append(mask)
             M2.append(mask2)
 
-        return S0, Sigma1, Sigma2, A, R, S1, T, M1, M2
+        return S0, Sigma1, Sigma2, SigmaGoal, A, R, S1, T, M1, M2
 
     def size(self):
         if self.filled:
