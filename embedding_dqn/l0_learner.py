@@ -242,7 +242,7 @@ class MultiHeadedDQLearner():
                        self.inp_terminated: l0_terminated, self.inp_mask: M1, self.inp_sp_mask: M2})
         return loss
 
-    def run_learning_episode(self, environment, initial_l1_state_vec, goal_l1_state_vec, initial_l1_state, goal_l1_state, abs_func, abs_vec_func, epsilon, max_episode_steps=100000):
+    def run_learning_episode(self, environment, initial_l1_state_vec, goal_l1_state_vec, initial_l1_state, goal_l1_state, abs_func, epsilon, max_episode_steps=100000):
         episode_steps = 0
         total_reward = 0
         episode_finished = False
@@ -289,7 +289,7 @@ class MultiHeadedDQLearner():
 
             new_l1_state = abs_func(state)
             if initial_l1_state != new_l1_state:
-                self.abs_neighbors[key_init].add(tuple(abs_vec_func(new_l1_state)))
+                self.abs_neighbors[key_init].add(tuple(new_l1_state.get_vector()))
 
                 episode_finished = True
 
@@ -299,7 +299,7 @@ class MultiHeadedDQLearner():
             # else:
             #     reward = 0
 
-            self.replay_buffer.append(state[-1], initial_l1_state_vec, abs_vec_func(new_l1_state), action, env_reward, next_state[-1], is_terminal)
+            self.replay_buffer.append(state[-1], initial_l1_state_vec, new_l1_state.get_vector(), action, env_reward, next_state[-1], is_terminal)
             if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
                 loss = self.update_q_values()
             if (self.action_ticker - self.replay_start_size) % self.target_copy_freq == 0:

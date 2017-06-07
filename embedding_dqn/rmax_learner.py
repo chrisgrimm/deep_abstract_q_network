@@ -60,9 +60,6 @@ class AbstractState(object):
             self.__vector = self.get_vector_lazy()
             return self.__vector
 
-    def get_vector_size(self):
-        raise NotImplemented
-
 
     def __hash__(self):
         return hash(self.get_key())
@@ -146,12 +143,10 @@ class MovingAverageTable(object):
 
 class RMaxLearner(interfaces.LearningAgent):
 
-    def __init__(self, abs_size, env, abs_vec_func, abs_func, N=1000, max_VI_iterations=100, VI_delta=0.01, gamma=0.9, rmax=10, max_num_abstract_states=10, frame_history=1):
+    def __init__(self, abs_size, env, abs_func, N=1000, max_VI_iterations=100, VI_delta=0.01, gamma=0.9, rmax=10, max_num_abstract_states=10, frame_history=1):
         self.env = env
         self.abs_size = abs_size
         self.abs_func = abs_func
-        # abs_vec_func produces an abstraction_vector (what goes into the embedding network) for a given state.
-        self.abs_vec_func = abs_vec_func
         self.rmax = rmax
         self.transition_table = MovingAverageTable(N, 1000, self.rmax)
         self.max_VI_iterations = max_VI_iterations
@@ -173,14 +168,14 @@ class RMaxLearner(interfaces.LearningAgent):
         self.states.add(state)
         self.values[state] = 0
         self.evaluation_values[state] = 0
-        self.actions_for_state[state] = [L1Action(state, None, self.abs_vec_func(state), self.abs_vec_func(state))]
+        self.actions_for_state[state] = [L1Action(state, None, state.get_vector(), state.get_vector())]
         self.neighbors[state] = []
         self.current_dqn_number += 1
 
         print 'Found new state: %s' % (state,)
 
     def add_new_action(self, state, goal_state):
-        new_action = L1Action(state, goal_state, self.abs_vec_func(state), self.abs_vec_func(goal_state))
+        new_action = L1Action(state, goal_state, state.get_vector(), goal_state.get_vector())
         self.actions_for_state[state].append(new_action)
         self.neighbors[state].append(goal_state)
         self.current_dqn_number += 1
@@ -271,7 +266,7 @@ class RMaxLearner(interfaces.LearningAgent):
                 eval_action = False
                 epsilon = max(self.l0_learner.epsilon_min, 1 - self.transition_table.get_success_rate(a))
             print 'Executing action: %s -- eps: %.6f' % (a, epsilon)
-            episode_steps, R, sp = self.l0_learner.run_learning_episode(self.env, a.initial_state_vec, a.goal_state_vec, s, a.goal_state, self.abs_func, self.abs_vec_func, epsilon, max_episode_steps=100)
+            episode_steps, R, sp = self.l0_learner.run_learning_episode(self.env, a.initial_state_vec, a.goal_state_vec, s, a.goal_state, self.abs_func, epsilon, max_episode_steps=100)
             if eval_action:
                 self.transition_table.insert_action_evaluation(a, a.goal_state == sp)
 
