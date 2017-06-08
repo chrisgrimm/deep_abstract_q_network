@@ -283,7 +283,8 @@ class RMaxLearner(interfaces.LearningAgent):
             if a.goal_state == None:
                 # if self.l0_learner.epsilon[dqn_tuple] <= self.l0_learner.epsilon_min:
                 if (s, a) in self.transition_table.sa_count and \
-                                self.transition_table.sa_count[(s, a)] >= self.transition_table.num_conf:
+                             self.transition_table.sa_count[(s, a)] >= self.transition_table.num_conf and \
+                             len(self.actions_for_state[a.initial_state]) > 1:
                     self.actions_for_state[a.initial_state].remove(a)
 
             total_episode_steps += episode_steps

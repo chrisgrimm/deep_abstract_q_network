@@ -71,7 +71,7 @@ def construct_dqn_with_embedding_2_layer(input, abs_state1, abs_state2, frame_hi
 def construct_dqn_with_subgoal_embedding(input, abs_state1, abs_state2, frame_history, num_actions):
     input = tf.image.convert_image_dtype(input, tf.float32)
     with tf.variable_scope('a1'):
-        a1 = th.fully_connected(tf.concat(1, [abs_state1, abs_state2]), 50, tf.nn.relu)
+        a1 = th.fully_connected(tf.concat([abs_state1, abs_state2], 1), 50, tf.nn.relu)
     with tf.variable_scope('c1'):
         c1 = th.down_convolution(input, 8, 4, frame_history, 32, tf.nn.relu)
     with tf.variable_scope('c2'):
@@ -80,7 +80,7 @@ def construct_dqn_with_subgoal_embedding(input, abs_state1, abs_state2, frame_hi
         c3 = th.down_convolution(c2, 3, 1, 64, 64, tf.nn.relu)
         N = np.prod([x.value for x in c3.get_shape()[1:]])
         c3 = tf.reshape(c3, [-1, N])
-        ac3 = tf.concat(1, [a1, c3])
+        ac3 = tf.concat([a1, c3], 1)
     with tf.variable_scope('fc1'):
         fc1 = th.fully_connected(ac3, 512, tf.nn.relu)
     with tf.variable_scope('fc2'):
@@ -100,7 +100,7 @@ def construct_embedding_network(abs_state1, abs_state2, hidden_size, embedding_s
     with tf.variable_scope('A', reuse=True):
         A2 = shared_abs(abs_state2, hidden_size)
     with tf.variable_scope('pre_embedding'):
-        pre_embedding = th.fully_connected(tf.concat(1, [A1, A2]), hidden_size*2, tf.nn.relu)
+        pre_embedding = th.fully_connected(tf.concat([A1, A2], 1), hidden_size*2, tf.nn.relu)
     with tf.variable_scope('embedding'):
         embedding = th.fully_connected(pre_embedding, embedding_size, lambda x: x)
     with tf.variable_scope('pre_weights'):
@@ -119,7 +119,7 @@ class MultiHeadedDQLearner():
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
-                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=1.0):
+                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=0.2):
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         config.allow_soft_placement = True
@@ -144,6 +144,7 @@ class MultiHeadedDQLearner():
         self.abs_neighbors = dict()
         self.gamma = gamma
         q_constructor = construct_dqn_with_embedding_2_layer
+        #q_constructor = construct_dqn_with_subgoal_embedding
         with tf.variable_scope('online'):
             mask_shape = [-1, 1, 1, frame_history]
             mask = tf.reshape(self.inp_mask, mask_shape)
@@ -162,18 +163,18 @@ class MultiHeadedDQLearner():
             self.maxQ = tf.gather_nd(self.q_target, tf.transpose(
                 [tf.range(0, 32, dtype=tf.int32), tf.cast(tf.argmax(self.q_online_prime, axis=1), tf.int32)], [1, 0]))
         else:
-            self.maxQ = tf.reduce_max(self.q_target, reduction_indices=1)
+            self.maxQ = tf.reduce_max(self.q_target, axis=1)
 
         self.r = tf.sign(self.inp_reward)
         use_backup = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32)
         self.y = self.r + use_backup * gamma * self.maxQ
 
-        self.delta_dqn = tf.reduce_sum(self.inp_actions * self.q_online, reduction_indices=1) - self.y
-        self.error_dqn = tf.select(tf.abs(self.delta_dqn) < error_clip, 0.5 * tf.square(self.delta_dqn),
+        self.delta_dqn = tf.reduce_sum(self.inp_actions * self.q_online, axis=1) - self.y
+        self.error_dqn = tf.where(tf.abs(self.delta_dqn) < error_clip, 0.5 * tf.square(self.delta_dqn),
                                error_clip * tf.abs(self.delta_dqn))
         if use_mmc:
             self.delta_mmc = (self.inp_mmc_reward - self.y)
-            self.error_mmc = tf.select(tf.abs(self.delta_mmc) < error_clip, 0.5 * tf.square(self.delta_mmc),
+            self.error_mmc = tf.where(tf.abs(self.delta_mmc) < error_clip, 0.5 * tf.square(self.delta_mmc),
                                error_clip * tf.abs(self.delta_mmc))
             # self.delta = (1. - self.mmc_beta) * self.delta_dqn + self.mmc_beta * self.delta_mmc
             self.loss = (1. - self.mmc_beta) * tf.reduce_sum(self.error_dqn) + self.mmc_beta * tf.reduce_sum(self.error_mmc)
@@ -347,8 +348,8 @@ class MultiHeadedDQLearner():
         a = rmax_learner.L1Action(initial_l1_state, goal_l1_state, initial_l1_state_vec, goal_l1_state_vec)
         q_vals_filename = 'action_progress/%s_qs.txt' % str(a)
         # loss_filename = 'action_progress/%s_loss.txt' % str(a)
-        with open(q_vals_filename, 'a') as f:
-            f.write(str(np.average(q_values)) + '\n')
+        #with open(q_vals_filename, 'a') as f:
+        #    f.write(str(np.average(q_values)) + '\n')
         # with open(loss_filename, 'a') as f:
         #     f.write(loss)
 

@@ -24,10 +24,11 @@ def get_bit(a, i):
 
 class MRAbstraction(object):
 
-    def __init__(self):
+    def __init__(self, use_sectors=True):
         self.global_state = [0] * len(global_object_locs)
         self.env = None
         self.current_room = 1
+        self.use_sectors = False
         self.agent_sector = (1, 2)
         self.old_should_check = True
 
@@ -72,7 +73,7 @@ class MRAbstraction(object):
         self.update_current_room(ram)
 
     def get_abstract_state(self):
-        return MRAbstractState(self.current_room, self.agent_sector, self.global_state)
+        return MRAbstractState(self.current_room, self.agent_sector if self.use_sectors else None, self.global_state)
 
     def abstraction_function(self, x):
         self.update_state(self.env.getRAM())
@@ -86,16 +87,22 @@ class MRAbstractState(AbstractState):
         self.global_state = tuple(global_state)
 
     def get_key_lazy(self):
-        return (self.room,) + self.agent_sector + self.global_state
+        return (self.room,) + (() if self.agent_sector is None else self.agent_sector) + self.global_state
 
     def get_vector_lazy(self):
         onehot_room = [0] * 24
         onehot_room[self.room] = 1
-        onehot_sector = [0] * 9
-        onehot_sector[3*self.agent_sector[1] + self.agent_sector[0]] = 1
+        if self.agent_sector is not None:
+            onehot_sector = [0] * 9
+            onehot_sector[3*self.agent_sector[1] + self.agent_sector[0]] = 1
+        else:
+            onehot_sector = []
         posneg_global_state = [1 if x == True else -1 for x in self.global_state]
         return onehot_room + onehot_sector + posneg_global_state
 
     def __str__(self):
         bools = ''.join(str(int(b)) for b in self.global_state)
-        return '%s - %s - %s' % (str(self.room), str(self.agent_sector), bools)
+        if self.agent_sector is not None:
+            return '%s - %s - %s' % (str(self.room), str(self.agent_sector), bools)
+        else:
+            return '%s - %s' % (str(self.room), bools)
