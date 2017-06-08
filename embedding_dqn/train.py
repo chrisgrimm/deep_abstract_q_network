@@ -69,6 +69,8 @@ def train(agent, env, test_epsilon, results_dir):
         env.terminate_on_end_life = True
         start_time = datetime.datetime.now()
         episode_steps, episode_reward = agent.run_learning_episode(env)
+        if episode_reward > 0:
+            env.terminate_on_end_life = False
         end_time = datetime.datetime.now()
         step_num += episode_steps
 

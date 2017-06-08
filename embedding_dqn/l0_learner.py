@@ -110,16 +110,33 @@ def construct_embedding_network(abs_state1, abs_state2, hidden_size, embedding_s
     return embedding, weights
 
 
+def construct_q_network_weights(input, dqn_numbers, dqn_max_number, frame_history, num_actions):
+    input = tf.image.convert_image_dtype(input, tf.float32)
+    with tf.variable_scope('c1'):
+        c1 = th.down_convolution_weights(input, dqn_numbers, dqn_max_number, 8, 4, frame_history, 32, tf.nn.relu)
+    with tf.variable_scope('c2'):
+        c2 = th.down_convolution_weights(c1, dqn_numbers, dqn_max_number, 4, 2, 32, 64, tf.nn.relu)
+    with tf.variable_scope('c3'):
+        c3 = th.down_convolution_weights(c2, dqn_numbers, dqn_max_number, 3, 1, 64, 64, tf.nn.relu)
+        N = np.prod([x.value for x in c3.get_shape()[1:]])
+        c3 = tf.reshape(c3, [-1, N])
+    with tf.variable_scope('fc1'):
+        fc1 = th.fully_connected_weights(c3, dqn_numbers, dqn_max_number, 512, tf.nn.relu)
+    with tf.variable_scope('fc2'):
+        q_values = th.fully_connected_weights(fc1, dqn_numbers, dqn_max_number, num_actions, lambda x: x)
+    return q_values
+
+
 
 
 
 class MultiHeadedDQLearner():
 
-    def __init__(self, abs_size, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00025, replay_start_size=50000,
+    def __init__(self, abs_size, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00025, replay_start_size=500,
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
-                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=1.0):
+                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=0.2, max_dqn_number=30):
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         config.allow_soft_placement = True
@@ -137,27 +154,31 @@ class MultiHeadedDQLearner():
         self.inp_mmc_reward = tf.placeholder(tf.float32, [None])
         self.inp_mask = tf.placeholder(inp_dtype, [None, frame_history])
         self.inp_sp_mask = tf.placeholder(inp_dtype, [None, frame_history])
+        self.inp_dqn_numbers = tf.placeholder(tf.int32, [None])
         #self.inp_q_choices = tf.placeholder(tf.int32, [None])
 
         self.inp_abs_state_init = tf.placeholder(tf.float32, [None, abs_size])
         self.inp_abs_state_goal = tf.placeholder(tf.float32, [None, abs_size])
         self.abs_neighbors = dict()
         self.gamma = gamma
-        q_constructor = construct_dqn_with_embedding_2_layer
+        self.max_dqn_number = max_dqn_number
+        q_constructor = lambda inp: construct_q_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
+        #q_constructor = lambda inp: construct_dqn_with_embedding_2_layer(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
+        #q_constructor = lambda inp: construct_dqn_with_subgoal_embedding(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
         with tf.variable_scope('online'):
             mask_shape = [-1, 1, 1, frame_history]
             mask = tf.reshape(self.inp_mask, mask_shape)
             masked_input = self.inp_frames * mask
-            self.q_online = q_constructor(masked_input, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
+            self.q_online = q_constructor(masked_input)
         with tf.variable_scope('target'):
             mask_shape = [-1, 1, 1, frame_history]
             sp_mask = tf.reshape(self.inp_sp_mask, mask_shape)
             masked_sp_input = self.inp_sp_frames * sp_mask
-            self.q_target = q_constructor(masked_sp_input, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
+            self.q_target = q_constructor(masked_sp_input)
 
         if double:
             with tf.variable_scope('online', reuse=True):
-                self.q_online_prime = q_constructor(masked_sp_input, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
+                self.q_online_prime = q_constructor(masked_sp_input)
                 print self.q_online_prime
             self.maxQ = tf.gather_nd(self.q_target, tf.transpose(
                 [tf.range(0, 32, dtype=tf.int32), tf.cast(tf.argmax(self.q_online_prime, axis=1), tf.int32)], [1, 0]))
@@ -221,7 +242,7 @@ class MultiHeadedDQLearner():
         ####################
 
     def update_q_values(self):
-        S1, Sigma1, Sigma2, SigmaGoal, A, R, MMC_R, S2, T, M1, M2 = self.replay_buffer.sample(self.batch_size)
+        S1, Sigma1, Sigma2, SigmaGoal, DQNNumbers, A, R, MMC_R, S2, T, M1, M2 = self.replay_buffer.sample(self.batch_size)
         Aonehot = np.zeros((self.batch_size, self.num_actions), dtype=np.float32)
         Aonehot[range(len(A)), A] = 1
 
@@ -254,10 +275,11 @@ class MultiHeadedDQLearner():
                        self.inp_abs_state_init: Sigma1,
                        self.inp_abs_state_goal: SigmaGoal,
                        self.inp_sp_frames: S2, self.inp_reward: R, self.inp_mmc_reward: MMC_R,
-                       self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2})
+                       self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2,
+                       self.inp_dqn_numbers: DQNNumbers})
         return loss
 
-    def run_learning_episode(self, environment, initial_l1_state_vec, goal_l1_state_vec, initial_l1_state, goal_l1_state, abs_func, epsilon, max_episode_steps=100000):
+    def run_learning_episode(self, environment, initial_l1_state_vec, goal_l1_state_vec, initial_l1_state, goal_l1_state, dqn_number, abs_func, epsilon, max_episode_steps=100000):
         episode_steps = 0
         total_reward = 0
         episode_finished = False
@@ -282,19 +304,19 @@ class MultiHeadedDQLearner():
 
             state = environment.get_current_state()
 
-            # Save state sample for this option
-            self.option_action_ticker[option_key] += 1
-            if len(self.state_samples_for_option[option_key]) < self.samples_per_option:
-                self.state_samples_for_option[option_key].append(state)
-            elif self.replay_buffer.size() > self.replay_start_size \
-                    and self.option_action_ticker[option_key] % self.progress_sample_frequency == 0:
-                self.record_option_progress(option_key, initial_l1_state_vec, goal_l1_state_vec, initial_l1_state,
-                                            goal_l1_state)
+            # # Save state sample for this option
+            # self.option_action_ticker[option_key] += 1
+            # if len(self.state_samples_for_option[option_key]) < self.samples_per_option:
+            #     self.state_samples_for_option[option_key].append(state)
+            # elif self.replay_buffer.size() > self.replay_start_size \
+            #         and self.option_action_ticker[option_key] % self.progress_sample_frequency == 0:
+            #     self.record_option_progress(option_key, initial_l1_state_vec, goal_l1_state_vec, initial_l1_state,
+            #                                 goal_l1_state)
 
             if np.random.uniform(0, 1) < epsilon:
                 action = np.random.choice(environment.get_actions_for_state(state))
             else:
-                action = self.get_action(state, initial_l1_state_vec, goal_l1_state_vec)
+                action = self.get_action(state, initial_l1_state_vec, goal_l1_state_vec, dqn_number)
 
             if self.replay_buffer.size() > self.replay_start_size:
                 self.epsilon[dqn_tuple] = max(self.epsilon_min, self.epsilon[dqn_tuple] - self.epsilon_delta)
@@ -312,16 +334,17 @@ class MultiHeadedDQLearner():
             else:
                 reward = 0
 
-            if self.use_mmc:
-                sars = (state[-1], initial_l1_state_vec, new_l1_state.get_vector(),
-                        goal_l1_state_vec, action, reward, next_state[-1], is_terminal or episode_finished)
-                self.mmc_tracker.append(*sars)
-                if is_terminal or episode_finished:
-                    self.mmc_tracker.flush()
-            else:
-                sars = (state[-1], initial_l1_state_vec, new_l1_state.get_vector(),
-                        goal_l1_state_vec, action, reward, 0, next_state[-1], is_terminal or episode_finished)
-                self.replay_buffer.append(*sars)
+            if goal_l1_state != None:
+                if self.use_mmc:
+                    sars = (state[-1], initial_l1_state_vec, new_l1_state.get_vector(),
+                            goal_l1_state_vec, dqn_number, action, reward, next_state[-1], is_terminal or episode_finished)
+                    self.mmc_tracker.append(*sars)
+                    if is_terminal or episode_finished:
+                        self.mmc_tracker.flush()
+                else:
+                    sars = (state[-1], initial_l1_state_vec, new_l1_state.get_vector(),
+                            goal_l1_state_vec, dqn_number, action, reward, 0, next_state[-1], is_terminal or episode_finished)
+                    self.replay_buffer.append(*sars)
 
             if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
                 loss = self.update_q_values()
@@ -352,14 +375,15 @@ class MultiHeadedDQLearner():
         # with open(loss_filename, 'a') as f:
         #     f.write(loss)
 
-    def get_action(self, state, initial_l1_state_vec, goal_l1_state_vec):
+    def get_action(self, state, initial_l1_state_vec, goal_l1_state_vec, dqn_number):
         state_input = np.transpose(state, [1, 2, 0])
 
         [q_values] = self.sess.run([self.q_online],
                                    feed_dict={self.inp_frames: [state_input],
                                               self.inp_mask: np.ones((1, self.frame_history), dtype=np.float32),
                                               self.inp_abs_state_init: [initial_l1_state_vec],
-                                              self.inp_abs_state_goal: [goal_l1_state_vec]})
+                                              self.inp_abs_state_goal: [goal_l1_state_vec],
+                                              self.inp_dqn_numbers: [dqn_number]})
         return np.argmax(q_values[0])
 
     def save_network(self, file_name):

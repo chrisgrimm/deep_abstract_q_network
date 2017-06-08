@@ -9,13 +9,14 @@ import l0_learner
 
 
 class L1Action(object):
-    def __init__(self, initial_state, goal_state, initial_state_vec, goal_state_vec):
+    def __init__(self, initial_state, goal_state, initial_state_vec, goal_state_vec, dqn_number=0):
         assert initial_state is None or issubclass(initial_state.__class__, AbstractState)
         assert goal_state is None or issubclass(goal_state.__class__, AbstractState)
         self.initial_state = initial_state
         self.goal_state = goal_state
         self.initial_state_vec = initial_state_vec
         self.goal_state_vec = goal_state_vec
+        self.dqn_number = dqn_number
 
     def __str__(self):
         if self.goal_state is None:
@@ -26,7 +27,7 @@ class L1Action(object):
     def get_key(self):
         initial_state_key = () if self.initial_state is None else self.initial_state.get_key()
         goal_state_key = () if self.goal_state is None else self.goal_state.get_key()
-        return (initial_state_key, goal_state_key)
+        return (initial_state_key, goal_state_key, self.dqn_number)
 
     def __hash__(self):
         return hash(self.get_key())
@@ -169,14 +170,13 @@ class RMaxLearner(interfaces.LearningAgent):
         self.states.add(state)
         self.values[state] = 0
         self.evaluation_values[state] = 0
-        self.actions_for_state[state] = [L1Action(state, None, state.get_vector(), state.get_vector())]
+        self.actions_for_state[state] = [L1Action(state, None, state.get_vector(), state.get_vector(), dqn_number=-1)]
         self.neighbors[state] = []
-        self.current_dqn_number += 1
 
         print 'Found new state: %s' % (state,)
 
     def add_new_action(self, state, goal_state):
-        new_action = L1Action(state, goal_state, state.get_vector(), goal_state.get_vector())
+        new_action = L1Action(state, goal_state, state.get_vector(), goal_state.get_vector(), dqn_number=self.current_dqn_number)
         self.actions_for_state[state].append(new_action)
         self.neighbors[state].append(goal_state)
         self.current_dqn_number += 1
@@ -269,7 +269,7 @@ class RMaxLearner(interfaces.LearningAgent):
                 eval_action = False
                 epsilon = max(self.l0_learner.epsilon_min, 1 - self.transition_table.get_success_rate(a))
             print 'Executing action: %s -- eps: %.6f' % (a, epsilon)
-            episode_steps, R, sp = self.l0_learner.run_learning_episode(self.env, a.initial_state_vec, a.goal_state_vec, s, a.goal_state, self.abs_func, epsilon, max_episode_steps=500)
+            episode_steps, R, sp = self.l0_learner.run_learning_episode(self.env, a.initial_state_vec, a.goal_state_vec, s, a.goal_state, a.dqn_number, self.abs_func, epsilon, max_episode_steps=500)
             if eval_action:
                 self.transition_table.insert_action_evaluation(a, a.goal_state == sp)
 
@@ -304,6 +304,9 @@ class RMaxLearner(interfaces.LearningAgent):
             if self.value_update_counter % self.value_update_freq == 0:
                 self.values = self.run_vi(self.values.copy())
             self.value_update_counter += 1
+
+            if R > 0:
+                break
 
         return total_episode_steps, total_reward
 
