@@ -119,6 +119,8 @@ def construct_q_network_weights(input, dqn_numbers, dqn_max_number, frame_histor
     with tf.variable_scope('c3'):
         c3 = th.down_convolution_weights(c2, dqn_numbers, dqn_max_number, 3, 1, 64, 64, tf.nn.relu)
         N = np.prod([x.value for x in c3.get_shape()[1:]])
+        # N = tf.reduce_prod(tf.shape(c3)[1:4])
+        # N = []
         c3 = tf.reshape(c3, [-1, N])
     with tf.variable_scope('fc1'):
         fc1 = th.fully_connected_weights(c3, dqn_numbers, dqn_max_number, 512, tf.nn.relu)

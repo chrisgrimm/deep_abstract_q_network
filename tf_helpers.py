@@ -11,20 +11,31 @@ def down_convolution(inp, kernel, stride, filter_in, filter_out, rectifier):
 
 
 def down_convolution_weights(inp, dqn_numbers, max_dqn_number, kernel, stride, filter_in, filter_out, rectifier):
+    print inp
     batch_size = tf.shape(inp)[0]
-    inp = tf.reshape(inp, [batch_size] + [x.value for x in inp.get_shape()[1:]])
+    #inp = tf.reshape(inp, [batch_size] + [x.value for x in inp.get_shape()[1:]])
+
     with tf.variable_scope('conv_vars'):
         W = tf.get_variable('w', [max_dqn_number, kernel, kernel, filter_in, filter_out], initializer=tf.contrib.layers.xavier_initializer())
         B = tf.get_variable('b', [max_dqn_number, filter_out], initializer=tf.constant_initializer(0.0))
+
     w = tf.reshape(tf.gather_nd(W, tf.reshape(dqn_numbers, [-1, 1])), [batch_size, kernel, kernel, filter_in, filter_out])
-    b = tf.reshape(tf.gather_nd(B, tf.reshape(dqn_numbers, [-1, 1])), [batch_size, filter_out])
-    print inp
-    print tf.nn.conv3d(tf.expand_dims(inp, 0), w, [1, 1, stride, stride, 1], 'VALID')
-    c = rectifier(tf.nn.conv3d(tf.expand_dims(inp, 0), w, [1, 1, stride, stride, 1], 'VALID')[0] + tf.reshape(b, [batch_size, 1, 1, filter_out]))
-    print c
-    #c = tf.reshape(c, [batch_size, tf.shape(c)[2], tf.shape(c)[3], tf.shape(c)[4]])
-    print c
-    return c
+    b = tf.reshape(tf.gather_nd(B, tf.reshape(dqn_numbers, [-1, 1])), [batch_size, 1, 1, filter_out])
+    conv_cs = []
+    for c in range(filter_in):
+        inp_c = tf.expand_dims(inp[:, :, :, c], -1) # [bs, h, w, 1]
+        inp_c = tf.transpose(inp_c, [3, 1, 2, 0]) # [1, h, w, bs]
+        w_c = w[:, :, :, c, :] # [bs, k, k, f_out]
+        w_c = tf.transpose(w_c, [1, 2, 0, 3]) # [k, k, bs, f_out]
+        conv_c = tf.nn.depthwise_conv2d(inp_c, w_c, [1, stride, stride, 1], 'VALID') # [1, h/s, w/s, f_out * bs]
+        h_s, w_s = conv_c.get_shape()[1].value, conv_c.get_shape()[2].value
+        #h_s, w_s = tf.shape(conv_c)[1], tf.shape(conv_c)[2]
+        conv_c = tf.reshape(conv_c, [h_s, w_s, batch_size, filter_out]) # [h/s, w/s, bs, f_out]
+        conv_c = tf.transpose(conv_c, [2, 0, 1, 3]) # [bs, h/s, w/s, f_out]
+        conv_cs.append(conv_c)
+    conv = tf.reduce_sum(conv_cs, axis=0) # [bs, h/s, w/s, f_out]
+    conv = rectifier(conv + b)
+    return conv
 
 
 def up_convolution(inp, kernel, filter_in, filter_out, rectifier, bias=0.0):
