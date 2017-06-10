@@ -10,6 +10,23 @@ def down_convolution(inp, kernel, stride, filter_in, filter_out, rectifier):
     return c
 
 
+def down_convolution_weights(inp, dqn_numbers, max_dqn_number, kernel, stride, filter_in, filter_out, rectifier):
+    batch_size = tf.shape(inp)[0]
+    inp = tf.reshape(inp, [batch_size] + [x.value for x in inp.get_shape()[1:]])
+    with tf.variable_scope('conv_vars'):
+        W = tf.get_variable('w', [max_dqn_number, kernel, kernel, filter_in, filter_out], initializer=tf.contrib.layers.xavier_initializer())
+        B = tf.get_variable('b', [max_dqn_number, filter_out], initializer=tf.constant_initializer(0.0))
+    w = tf.reshape(tf.gather_nd(W, tf.reshape(dqn_numbers, [-1, 1])), [batch_size, kernel, kernel, filter_in, filter_out])
+    b = tf.reshape(tf.gather_nd(B, tf.reshape(dqn_numbers, [-1, 1])), [batch_size, filter_out])
+    print inp
+    print tf.nn.conv3d(tf.expand_dims(inp, 0), w, [1, 1, stride, stride, 1], 'VALID')
+    c = rectifier(tf.nn.conv3d(tf.expand_dims(inp, 0), w, [1, 1, stride, stride, 1], 'VALID')[0] + tf.reshape(b, [batch_size, 1, 1, filter_out]))
+    print c
+    #c = tf.reshape(c, [batch_size, tf.shape(c)[2], tf.shape(c)[3], tf.shape(c)[4]])
+    print c
+    return c
+
+
 def up_convolution(inp, kernel, filter_in, filter_out, rectifier, bias=0.0):
     [h, w, c] = [x.value for x in inp.get_shape()[1:]]
     with tf.variable_scope('deconv_vars'):
@@ -23,6 +40,16 @@ def fully_connected(inp, neurons, rectifier, bias=0.0):
         w = tf.get_variable('w', [inp.get_shape()[1].value, neurons], initializer=tf.contrib.layers.xavier_initializer())
         b = tf.get_variable('b', [neurons], initializer=tf.constant_initializer(bias))
     fc = rectifier(tf.matmul(inp, w) + b)
+    return fc
+
+def fully_connected_weights(inp, dqn_numbers, max_dqn_number, neurons, rectifier, bias=0.0):
+    batch_size = tf.shape(inp)[0]
+    with tf.variable_scope('full_conv_vars'):
+        W = tf.get_variable('W', [max_dqn_number, inp.get_shape()[1].value, neurons], initializer=tf.contrib.layers.xavier_initializer())
+        B = tf.get_variable('B', [max_dqn_number, neurons], initializer=tf.constant_initializer(bias))
+    w = tf.reshape(tf.gather_nd(W, tf.reshape(dqn_numbers, [-1, 1])), [batch_size, inp.get_shape()[1].value, neurons])
+    b = tf.reshape(tf.gather_nd(B, tf.reshape(dqn_numbers, [-1, 1])), [batch_size, neurons])
+    fc = rectifier(tf.reshape(tf.matmul(tf.reshape(inp, [batch_size, 1, inp.get_shape()[1].value]), w), [batch_size, -1]) + b)
     return fc
 
 

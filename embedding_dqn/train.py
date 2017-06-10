@@ -69,6 +69,8 @@ def train(agent, env, test_epsilon, results_dir):
         env.terminate_on_end_life = True
         start_time = datetime.datetime.now()
         episode_steps, episode_reward = agent.run_learning_episode(env)
+        if episode_reward > 0:
+            env.terminate_on_end_life = False
         end_time = datetime.datetime.now()
         step_num += episode_steps
 
@@ -105,7 +107,7 @@ def train_rmax_daqn(env, num_actions):
     # abs_vec_func = lambda state: [float(state[0]), float(state[1])] + [1.0 if state[i] else -1.0 for i in range(2, len(state))]
     # abs_size = 10
     frame_history = 4
-    use_sectors = False
+    use_sectors = True
     abs = mr_abs.MRAbstraction(use_sectors=use_sectors)
     env.set_abstraction(abs)
     abs.set_env(env)

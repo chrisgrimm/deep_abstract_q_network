@@ -11,19 +11,19 @@ class MMCPathTracker(object):
         self.C = 0
         self.path_length_counter = 0
 
-    def push(self, S1, Sigma1, Sigma2, SigmaGoal, A, R, S2, T):
+    def push(self, S1, Sigma1, Sigma2, SigmaGoal, DQNNumber, A, R, S2, T):
         self.C += self.gamma ** self.path_length_counter * R
-        self.path.append((S1, Sigma1, Sigma2, SigmaGoal, A, R, S2, T))
+        self.path.append((S1, Sigma1, Sigma2, SigmaGoal, DQNNumber, A, R, S2, T))
 
     def pop(self):
-        (S1, Sigma1, Sigma2, SigmaGoal, A, R, S2, T) = self.path.popleft()
-        self.replay_memory.append(S1, Sigma1, Sigma2, SigmaGoal, A, R, self.C, S2, T)
+        (S1, Sigma1, Sigma2, SigmaGoal, DQNNumber, A, R, S2, T) = self.path.popleft()
+        self.replay_memory.append(S1, Sigma1, Sigma2, SigmaGoal, DQNNumber, A, R, self.C, S2, T)
         self.C = (self.C - R)/self.gamma
 
-    def append(self, S1, Sigma1, Sigma2, SigmaGoal, A, R, S2, T):
+    def append(self, S1, Sigma1, Sigma2, SigmaGoal, DQNNumber, A, R, S2, T):
         if len(self.path) == self.max_path_length:
             self.pop()
-        self.push(S1, Sigma1, Sigma2, SigmaGoal, A, R, S2, T)
+        self.push(S1, Sigma1, Sigma2, SigmaGoal, DQNNumber, A, R, S2, T)
         self.path_length_counter = min(self.path_length_counter + 1, self.max_path_length)
 
     def flush(self):
@@ -49,19 +49,21 @@ class ReplayMemory(object):
         self.sigma1 = np.zeros([capacity, abs_size], dtype=np.float32)
         self.sigma2 = np.zeros([capacity, abs_size], dtype=np.float32)
         self.sigma_goal = np.zeros([capacity, abs_size], dtype=np.float32)
+        self.dqn_numbers = np.zeros([capacity], dtype=np.uint32)
         self.action = np.zeros(capacity, dtype=np.uint8)
         self.reward = np.zeros(capacity, dtype=np.float32)
         self.mmc_reward = np.zeros(capacity, dtype=np.float32)
         self.terminated = np.zeros(capacity, dtype=np.bool)
         self.transposed_shape = range(1, len(self.input_shape)+1) + [0]
 
-    def append(self, S1, Sigma1, Sigma2, SigmaGoal, A, R, MMCR, S2, T):
+    def append(self, S1, Sigma1, Sigma2, SigmaGoal, DQNNumber, A, R, MMCR, S2, T):
         if self.filled:
             self.abstract_action_numerator_table[(tuple(self.sigma1[self.t, :]), tuple(self.sigma2[self.t, :]))] -= 1
         self.screens[self.t, :, :] = S1
         self.sigma1[self.t, :] = Sigma1
         self.sigma2[self.t, :] = Sigma2
         self.sigma_goal[self.t, :] = SigmaGoal
+        self.dqn_numbers[self.t] = DQNNumber
         if (tuple(Sigma1), tuple(Sigma2)) in self.abstract_action_numerator_table:
             self.abstract_action_numerator_table[(tuple(Sigma1), tuple(Sigma2))] += 1
         else:
@@ -120,8 +122,9 @@ class ReplayMemory(object):
         sigma1 = self.sigma1[index]
         sigma2 = self.sigma2[index]
         sigma_goal = self.sigma_goal[index]
+        dqn_number = self.dqn_numbers[index]
 
-        return S0, sigma1, sigma2, sigma_goal, a, r, mmc_r, S1, t, mask, mask2
+        return S0, sigma1, sigma2, sigma_goal, dqn_number, a, r, mmc_r, S1, t, mask, mask2
 
     def sample(self, num_samples):
         if not self.filled:
@@ -135,6 +138,7 @@ class ReplayMemory(object):
         Sigma1 = []
         Sigma2 = []
         SigmaGoal = []
+        DQNNumbers = []
         A = []
         R = []
         MMC_R = []
@@ -144,11 +148,12 @@ class ReplayMemory(object):
         M2 = []
 
         for sample_i in idx:
-            s0, sigma1, sigma2, sigma_goal, a, r, mmc_r, s1, t, mask, mask2 = self.get_sample(sample_i)
+            s0, sigma1, sigma2, sigma_goal, dqn_number, a, r, mmc_r, s1, t, mask, mask2 = self.get_sample(sample_i)
             S0.append(s0)
             Sigma1.append(sigma1)
             Sigma2.append(sigma2)
             SigmaGoal.append(sigma_goal)
+            DQNNumbers.append(dqn_number)
             A.append(a)
             R.append(r)
             MMC_R.append(mmc_r)
@@ -157,7 +162,7 @@ class ReplayMemory(object):
             M1.append(mask)
             M2.append(mask2)
 
-        return S0, Sigma1, Sigma2, SigmaGoal, A, R, MMC_R, S1, T, M1, M2
+        return S0, Sigma1, Sigma2, SigmaGoal, DQNNumbers, A, R, MMC_R, S1, T, M1, M2
 
     def size(self):
         if self.filled:

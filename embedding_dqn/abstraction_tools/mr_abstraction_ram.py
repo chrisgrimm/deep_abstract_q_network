@@ -28,7 +28,7 @@ class MRAbstraction(object):
         self.global_state = [0] * len(global_object_locs)
         self.env = None
         self.current_room = 1
-        self.use_sectors = False
+        self.use_sectors = use_sectors
         self.agent_sector = (1, 2)
         self.old_should_check = True
 
