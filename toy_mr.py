@@ -86,7 +86,7 @@ class ToyMRAbstractState(AbstractState):
 
 class ToyMR(Environment):
 
-    def __init__(self, map_file, abstraction_file=None, max_num_actions=10000, use_gui=True):
+    def __init__(self, map_file, abstraction_file=None, max_num_actions=10000, use_gui=False):
 
         self.rooms, self.starting_room, self.starting_cell, self.goal_room, self.keys, self.doors = self.parse_map_file(map_file)
         if abstraction_file is not None:
@@ -111,18 +111,21 @@ class ToyMR(Environment):
         pygame.init()
 
         # create screen
-        self.screen = pygame.display.set_mode((self.room.size[0] * self.tile_size, self.room.size[1] * self.tile_size + self.hud_height))
+        if self.use_gui:
+            self.screen = pygame.display.set_mode((self.room.size[0] * self.tile_size, self.room.size[1] * self.tile_size + self.hud_height))
+        else:
+            self.screen = pygame.Surface((self.room.size[0] * self.tile_size, self.room.size[1] * self.tile_size + self.hud_height))
         self.last_refresh = datetime.datetime.now()
         self.refresh_time = datetime.timedelta(milliseconds=1000 / 60)
 
         # load assets
-        self.key_image = pygame.image.load(os.path.join(os.path.dirname(os.path.realpath(__file__)), './mr_maps/mr_key.png')).convert_alpha()
-        self.key_image = pygame.transform.scale(self.key_image, (self.hud_height, self.hud_height))
+        #self.key_image = pygame.image.load(os.path.join(os.path.dirname(os.path.realpath(__file__)), './mr_maps/mr_key.png')).convert_alpha()
+        #self.key_image = pygame.transform.scale(self.key_image, (self.hud_height, self.hud_height))
 
         self.create_sectors()
 
         self.screen.fill(BACKGROUND_COLOR)
-        self.draw()
+        #self.draw()
         self.generate_new_state()
 
     def parse_abs_file(self, abs_file):
@@ -296,7 +299,8 @@ class ToyMR(Environment):
 
         if self.use_gui:
             self.refresh_gui()
-            self.generate_new_state()
+        
+        self.generate_new_state()
 
         return start_state, action, reward, self.get_current_state(), self.is_current_state_terminal()
 
@@ -324,16 +328,14 @@ class ToyMR(Environment):
         self.state = cv2.resize(image, (84, 84))
 
     def get_current_state(self):
-        if self.use_gui:
-            return [self.state]
-        else:
-            return None
+        return [self.state]
 
     def sector_abstraction(self, state):
         if self.rooms_abs is None:
             raise Exception('Cant use sector abstraction if no abstraction file is provided to ToyMR constructor.')
         sector = self.rooms_abs_numeric_map[self.room.loc][self.rooms_abs[self.room.loc][self.agent]]
-        return self.room.loc + (sector,) + tuple(np.array(self.keys.values(), dtype=int)) + tuple(np.array(self.doors.values(), dtype=int))
+        #return self.room.loc + (sector,) + tuple(np.array(self.keys.values(), dtype=int)) + tuple(np.array(self.doors.values(), dtype=int))
+        return ToyMRAbstractState(self.room.loc, sector, self.keys.values(), self.doors.values())
 
     #def sector_abstraction(self, state):
     #    sector = -1
@@ -411,7 +413,8 @@ class ToyMR(Environment):
 
         # draw hud
         for i in range(self.num_keys):
-            self.screen.blit(self.key_image, (i * (self.hud_height + 2), 0))
+            #self.screen.blit(self.key_image, (i * (self.hud_height + 2), 0))
+            self.draw_rect((i * (self.hud_height + 2), 0), KEY_COLOR)
 
     def render_screen_generated(self, name, walls, keys, doors, traps, agents):
         # clear screen

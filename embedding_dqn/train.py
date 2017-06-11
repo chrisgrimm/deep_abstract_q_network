@@ -20,6 +20,12 @@ from embedding_dqn.abstraction_tools import mr_abstraction_ram as mr_abs
 # import dq_learner_priors
 from embedding_dqn import rmax_learner
 
+def debug_signal_handler(signal, frame):
+    import pdb
+    pdb.set_trace()
+import signal
+signal.signal(signal.SIGINT, debug_signal_handler)
+
 num_steps = 50000000
 test_interval = 250000
 test_frames = 12500
@@ -102,17 +108,19 @@ def train_rmax_daqn(env, num_actions):
     training_epsilon = 0.01
     test_epsilon = 0.001
 
-    #frame_history = 1
-    #dqn = atari_dqn.AtariDQN(frame_history, num_actions)
-    # abs_vec_func = lambda state: [float(state[0]), float(state[1])] + [1.0 if state[i] else -1.0 for i in range(2, len(state))]
-    # abs_size = 10
-    frame_history = 4
-    use_sectors = True
-    abs = mr_abs.MRAbstraction(use_sectors=use_sectors)
-    env.set_abstraction(abs)
-    abs.set_env(env)
-    abs_func = abs.abstraction_function
-    abs_size = 24 + (9 if use_sectors else 0) + 10
+    frame_history = 1
+    dqn = atari_dqn.AtariDQN(frame_history, num_actions)
+    abs_size = 33
+    abs_func = env.sector_abstraction
+
+    #frame_history = 4
+    #use_sectors = True
+    #abs = mr_abs.MRAbstraction(use_sectors=use_sectors)
+    #env.set_abstraction(abs)
+    #abs.set_env(env)
+    #abs_func = abs.abstraction_function
+    #abs_size = 24 + (9 if use_sectors else 0) + 10
+    
     agent = rmax_learner.RMaxLearner(abs_size, env, abs_func, frame_history=frame_history)
 
     train(agent, env, test_epsilon, results_dir)
@@ -128,15 +136,16 @@ def train_rmax_daqn_sectors(env, num_actions):
     training_epsilon = 0.01
     test_epsilon = 0.001
 
-    # frame_history = 1
-    # abs_func = env.sector_abstraction
-    # abs_vec_func = sector_abs_vec_func
-    # abs_size = 15
+    frame_history = 1
+    abs_func = env.sector_abstraction
+    abs_vec_func = sector_abs_vec_func
+    abs_size = 15
 
-    frame_history = 4
-    abs_func = env.abstraction
-    abs_vec_func = ma.montezuma_abstraction_vector
-    abs_size = 35 + 9
+    #frame_history = 4
+    #abs_func = env.abstraction
+    #abs_vec_func = ma.montezuma_abstraction_vector
+    #abs_size = 35 + 9
+    
     agent = rmax_learner.RMaxLearner(abs_size, env, abs_vec_func, abs_func, frame_history=frame_history)
 
     train(agent, env, test_epsilon, results_dir)
@@ -175,7 +184,7 @@ def setup_tabular_env():
     return env, num_actions
 
 def setup_toy_mr_env():
-    env = toy_mr.ToyMR('../mr_maps/full_mr_map.txt', abstraction_file='../mr_maps/full_mr_map_abs.txt', use_gui=True)
+    env = toy_mr.ToyMR('./mr_maps/full_mr_map.txt', abstraction_file='./mr_maps/full_mr_map_abs.txt', use_gui=False)
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
@@ -189,5 +198,5 @@ game = 'mr_100000'
 #train_rmax_daqn(*setup_mr_env())
 # train_rmax_daqn(*setup_mr_env())
 # train_double_dqn(*setup_toy_mr_env())
-train_rmax_daqn(*setup_mr_env())
-# train_rmax_daqn_sectors(*setup_toy_mr_env())
+# train_rmax_daqn(*setup_mr_env())
+train_rmax_daqn(*setup_toy_mr_env())

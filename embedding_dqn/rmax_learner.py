@@ -2,6 +2,8 @@ import interfaces
 from collections import deque
 import numpy as np
 import tensorflow as tf
+import sys
+
 
 import l0_learner
 
@@ -158,8 +160,7 @@ class RMaxLearner(interfaces.LearningAgent):
         self.gamma = gamma
         self.value_update_counter = 0
         self.value_update_freq = 10
-        with tf.device('/gpu:1'):
-            self.l0_learner = l0_learner.MultiHeadedDQLearner(abs_size, len(self.env.get_actions_for_state(None)), max_num_abstract_states, frame_history=frame_history)
+        self.l0_learner = l0_learner.MultiHeadedDQLearner(abs_size, len(self.env.get_actions_for_state(None)), max_num_abstract_states, frame_history=frame_history)
         self.actions_for_state = dict()
         self.neighbors = dict()
         self.states = set()
@@ -243,8 +244,6 @@ class RMaxLearner(interfaces.LearningAgent):
         total_episode_steps = 0
         total_reward = 0
 
-        x = not self.env.abstraction.should_perform_sector_check(self.env.getRAM())
-
         while not self.env.is_current_state_terminal():
 
             s = self.abs_func(self.env.get_current_state())
@@ -265,13 +264,19 @@ class RMaxLearner(interfaces.LearningAgent):
             if a.goal_state is not None and np.random.uniform(0, 1) < 0.1:
                 eval_action = True
                 epsilon = self.l0_learner.epsilon_min
+                sys.stdout.write('Executing action: %s -- EVAL ... ' % (a))
             else:
                 eval_action = False
                 epsilon = max(self.l0_learner.epsilon_min, 1 - self.transition_table.get_success_rate(a))
-            print 'Executing action: %s -- eps: %.6f' % (a, epsilon)
+                sys.stdout.write('Executing action: %s -- eps: %.6f ... ' % (a, epsilon))
+            
             episode_steps, R, sp = self.l0_learner.run_learning_episode(self.env, a.initial_state_vec, a.goal_state_vec, s, a.goal_state, a.dqn_number, self.abs_func, epsilon, max_episode_steps=500)
             if eval_action:
                 self.transition_table.insert_action_evaluation(a, a.goal_state == sp)
+            if a.goal_state == sp:
+                sys.stdout.write('SUCCESS\n')
+            else:
+                sys.stdout.write('FAILURE\n')
 
             # #TODO: REMOVE LATER
             # abs_state = self.env.abstraction_tree.get_abstract_state()
