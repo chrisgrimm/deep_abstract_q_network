@@ -11,8 +11,8 @@ import dq_learner
 import toy_mr
 import wind_tunnel
 import daqn
-import tabular_dqn
-import tabular_coin_game
+#import tabular_dqn
+#import tabular_coin_game
 from embedding_dqn import mr_environment
 from embedding_dqn.abstraction_tools import mr_abstraction_ram as mr_abs
 
@@ -107,11 +107,12 @@ def train_rmax_daqn(env, num_actions):
     # abs_vec_func = lambda state: [float(state[0]), float(state[1])] + [1.0 if state[i] else -1.0 for i in range(2, len(state))]
     # abs_size = 10
     frame_history = 4
-    abs = mr_abs.MRAbstraction()
+    use_sectors = True
+    abs = mr_abs.MRAbstraction(use_sectors=use_sectors)
     env.set_abstraction(abs)
     abs.set_env(env)
     abs_func = abs.abstraction_function
-    abs_size = 24 + 9 + 10
+    abs_size = 24 + (9 if use_sectors else 0) + 10
     agent = rmax_learner.RMaxLearner(abs_size, env, abs_func, frame_history=frame_history)
 
     train(agent, env, test_epsilon, results_dir)

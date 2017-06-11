@@ -60,7 +60,7 @@ def fully_connected_weights(inp, dqn_numbers, max_dqn_number, neurons, rectifier
         B = tf.get_variable('B', [max_dqn_number, neurons], initializer=tf.constant_initializer(bias))
     w = tf.reshape(tf.gather_nd(W, tf.reshape(dqn_numbers, [-1, 1])), [batch_size, inp.get_shape()[1].value, neurons])
     b = tf.reshape(tf.gather_nd(B, tf.reshape(dqn_numbers, [-1, 1])), [batch_size, neurons])
-    fc = rectifier(tf.reshape(tf.batch_matmul(tf.reshape(inp, [batch_size, 1, inp.get_shape()[1].value]), w), [batch_size, -1]) + b)
+    fc = rectifier(tf.reshape(tf.matmul(tf.reshape(inp, [batch_size, 1, inp.get_shape()[1].value]), w), [batch_size, -1]) + b)
     return fc
 
 
