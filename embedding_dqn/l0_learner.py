@@ -129,7 +129,7 @@ def construct_q_network_weights(input, dqn_numbers, dqn_max_number, frame_histor
     return q_values
 
 def leaky_relu(x, alpha=0.001):
-    return tf.maximum(x, alpha)
+    return tf.maximum(x, alpha*x)
 def construct_small_network_weights(input, dqn_numbers, dqn_max_number, frame_history, num_actions):
     input = tf.image.convert_image_dtype(input, tf.float32)
     with tf.variable_scope('c1'):
@@ -179,7 +179,7 @@ class MultiHeadedDQLearner():
         self.abs_neighbors = dict()
         self.gamma = gamma
         self.max_dqn_number = max_dqn_number
-        q_constructor = lambda inp: construct_q_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
+        #q_constructor = lambda inp: construct_q_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
         q_constructor = lambda inp: construct_small_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
         #q_constructor = lambda inp: construct_dqn_with_embedding_2_layer(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
         #q_constructor = lambda inp: construct_dqn_with_subgoal_embedding(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
@@ -276,12 +276,12 @@ class MultiHeadedDQLearner():
         #     l0_terminated.append(l1_transitioned or terminal)
         #
         #     if terminal:
-        #         r = -1
+        #         r = 0
         #     elif l1_transitioned:
         #         if tuple(sigma2) == tuple(sigma_goal):
         #             r = 1
         #         else:
-        #             r = -1
+        #             r = 0
         #     else:
         #         r = 0
         #     R.append(r)
@@ -347,7 +347,7 @@ class MultiHeadedDQLearner():
                 self.abs_neighbors[key_init].add(tuple(new_l1_state.get_vector()))
 
             if initial_l1_state != new_l1_state or is_terminal:
-                reward = 1 if new_l1_state == goal_l1_state else -1
+                reward = 1 if new_l1_state == goal_l1_state else 0
                 episode_finished = True
             else:
                 reward = 0

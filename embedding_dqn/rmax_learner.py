@@ -150,7 +150,7 @@ class RMaxLearner(interfaces.LearningAgent):
         self.abs_size = abs_size
         self.abs_func = abs_func
         self.rmax = rmax
-        self.transition_table = MovingAverageTable(N, 1000, self.rmax)
+        self.transition_table = MovingAverageTable(N, 100, self.rmax)
         self.max_VI_iterations = max_VI_iterations
         self.VI_delta = VI_delta
         self.values = dict()
