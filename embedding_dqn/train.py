@@ -80,20 +80,20 @@ def train(agent, env, test_epsilon, results_dir):
         # print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
         #     end_time - start_time).total_seconds(), '\tEps:', agent.epsilon
 
-        steps_until_test -= episode_steps
-        if steps_until_test <= 0:
-            steps_until_test += test_interval
-            print 'Evaluating network...'
-            episode_rewards, num_explored_states = evaluate_agent_reward(test_frames, env, agent, test_epsilon)
-            mean_reward = np.mean(episode_rewards)
-
-            if mean_reward > best_eval_reward:
-                best_eval_reward = mean_reward
-                agent.save_network('%s/%s_best_net.ckpt' % (results_dir, game))
-
-            print 'Mean Reward:', mean_reward, 'Best:', best_eval_reward
-            results_file.write('Step: %d -- Mean reward: %.2f -- Num Explored: %s\n' % (step_num, mean_reward, num_explored_states))
-            results_file.flush()
+        # steps_until_test -= episode_steps
+        # if steps_until_test <= 0:
+        #     steps_until_test += test_interval
+        #     print 'Evaluating network...'
+        #     episode_rewards, num_explored_states = evaluate_agent_reward(test_frames, env, agent, test_epsilon)
+        #     mean_reward = np.mean(episode_rewards)
+        #
+        #     if mean_reward > best_eval_reward:
+        #         best_eval_reward = mean_reward
+        #         agent.save_network('%s/%s_best_net.ckpt' % (results_dir, game))
+        #
+        #     print 'Mean Reward:', mean_reward, 'Best:', best_eval_reward
+        #     results_file.write('Step: %d -- Mean reward: %.2f -- Num Explored: %s\n' % (step_num, mean_reward, num_explored_states))
+        #     results_file.flush()
 
 
 def train_rmax_daqn(env, num_actions):
