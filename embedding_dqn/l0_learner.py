@@ -211,7 +211,7 @@ class MultiHeadedDQLearner():
         self.error_dqn = tf.where(tf.abs(self.delta_dqn) < error_clip, 0.5 * tf.square(self.delta_dqn),
                                error_clip * tf.abs(self.delta_dqn))
         if use_mmc:
-            self.delta_mmc = self.q_online - self.inp_mmc_reward
+            self.delta_mmc = tf.reduce_sum(self.inp_actions * self.q_online, axis=1) - self.inp_mmc_reward
             self.error_mmc = tf.where(tf.abs(self.delta_mmc) < error_clip, 0.5 * tf.square(self.delta_mmc),
                                error_clip * tf.abs(self.delta_mmc))
             # self.delta = (1. - self.mmc_beta) * self.delta_dqn + self.mmc_beta * self.delta_mmc
