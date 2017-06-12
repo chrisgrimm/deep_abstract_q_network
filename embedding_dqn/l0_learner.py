@@ -68,10 +68,18 @@ def construct_dqn_with_embedding_2_layer(input, abs_state1, abs_state2, frame_hi
         q_values = tf.reshape(tf.matmul(tf.reshape(fc1, [-1, 1, 512]), w), [-1, num_actions]) + b
     return q_values
 
+def legacy_concat(dim=None, data=None):
+    if dim == None or data == None:
+        raise Exception('need to specify both concat dimension and data')
+    if tf.__version__ == '0.12.1':
+        return tf.concat(dim, data)
+    else:
+        return tf.concat(data, dim)
+
 def construct_dqn_with_subgoal_embedding(input, abs_state1, abs_state2, frame_history, num_actions):
     input = tf.image.convert_image_dtype(input, tf.float32)
     with tf.variable_scope('a1'):
-        a1 = th.fully_connected(tf.concat([abs_state1, abs_state2], 1), 50, tf.nn.relu)
+        a1 = th.fully_connected(legacy_concat(data=[abs_state1, abs_state2], dim=1), 50, tf.nn.relu)
     with tf.variable_scope('c1'):
         c1 = th.down_convolution(input, 8, 4, frame_history, 32, tf.nn.relu)
     with tf.variable_scope('c2'):
@@ -80,7 +88,7 @@ def construct_dqn_with_subgoal_embedding(input, abs_state1, abs_state2, frame_hi
         c3 = th.down_convolution(c2, 3, 1, 64, 64, tf.nn.relu)
         N = np.prod([x.value for x in c3.get_shape()[1:]])
         c3 = tf.reshape(c3, [-1, N])
-        ac3 = tf.concat([a1, c3], 1)
+        ac3 = legacy_concat(dim=1, data=[a1, c3])
     with tf.variable_scope('fc1'):
         fc1 = th.fully_connected(ac3, 512, tf.nn.relu)
     with tf.variable_scope('fc2'):
@@ -153,7 +161,7 @@ class MultiHeadedDQLearner():
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
-                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=0.2, max_dqn_number=30):
+                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=1.0, max_dqn_number=300):
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         config.allow_soft_placement = True
