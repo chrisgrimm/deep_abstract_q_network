@@ -90,7 +90,8 @@ class AtariEnvironment(interfaces.Environment):
         return reward
 
     def get_current_state(self):
-        return copy.copy(self.frame_history)
+        #return copy.copy(self.frame_history)
+        return [x.copy() for x in self.frame_history]
 
     def get_actions_for_state(self, state):
         return [self.atari_to_onehot[a] for a in self.ale.getMinimalActionSet()]
