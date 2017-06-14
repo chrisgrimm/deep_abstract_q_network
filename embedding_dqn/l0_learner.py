@@ -153,7 +153,7 @@ def construct_small_network_weights(input, dqn_numbers, dqn_max_number, frame_hi
     return q_values
 
 
-def construct_meta_dqn_network(input, abs_state1, abs_state2, frame_history, num_actions)
+def construct_meta_dqn_network(input, abs_state1, abs_state2, frame_history, num_actions):
     input = tf.image.convert_image_dtype(input, tf.float32)
     meta_input = tf.concat([abs_state1, abs_state2], axis=1)
     with tf.variable_scope('c1'):
