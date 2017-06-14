@@ -54,7 +54,7 @@ def down_convolution_meta(data_inp, meta_inp, kernel, stride, filter_out, rectif
         mfc4 = fully_connected(mfc3, meta_weight_size, rectifier=leakyRelu)
     with tf.variable_scope('bias'):
         bias = fully_connected(mfc4, filter_out, rectifier=lambda x:x)
-    return rectifier(tf.nn.conv2d(data_inp, filter, [1, stride, stride, 1]) + bias)
+    return rectifier(tf.nn.conv2d(data_inp, filter, [1, stride, stride, 1], 'VALID') + bias)
 
 def fully_connected_meta(inp, meta_inp, neurons, rectifier, meta_weight_size = 100):
     inp_size = inp.get_shape()[1].value
