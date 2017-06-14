@@ -47,7 +47,7 @@ def down_convolution_meta(data_inp, meta_inp, kernel, stride, filter_out, rectif
     with tf.variable_scope('mfc2'):
         mfc2 = fully_connected(mfc1, meta_weight_size, rectifier=leakyRelu)
     with tf.variable_scope('filters'):
-        filter = tf.reshape(fully_connected(mfc2, kernel*kernel*filter_out, rectifier=lambda x:x), [kernel, kernel, filter_in, filter_out])
+        filter = tf.reshape(fully_connected(mfc2, kernel*kernel*filter_in*filter_out, rectifier=lambda x:x), [kernel, kernel, filter_in, filter_out])
     with tf.variable_scope('mfc3'):
         mfc3 = fully_connected(meta_inp, meta_weight_size, rectifier=leakyRelu)
     with tf.variable_scope('mfc4'):
@@ -56,7 +56,7 @@ def down_convolution_meta(data_inp, meta_inp, kernel, stride, filter_out, rectif
         bias = fully_connected(mfc4, filter_out, rectifier=lambda x:x)
     return rectifier(tf.nn.conv2d(data_inp, filter, [1, stride, stride, 1], 'VALID') + bias)
 
-def fully_connected_meta(inp, meta_inp, neurons, rectifier, meta_weight_size = 100):
+def fully_connected_meta(inp, meta_inp, neurons, rectifier, meta_weight_size=100):
     inp_size = inp.get_shape()[1].value
     with tf.variable_scope('mfc1'):
         mfc1 = fully_connected(meta_inp, meta_weight_size, rectifier=leakyRelu)
