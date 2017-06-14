@@ -69,7 +69,7 @@ def down_convolution_meta(data_inp, meta_inp, kernel, stride, filter_out, rectif
         conv_c = tf.transpose(conv_c, [2, 0, 1, 3]) # [bs, h/s, w/s, f_out]
         conv_cs.append(conv_c)
     conv = tf.reduce_sum(conv_cs, axis=0) # [bs, h/s, w/s, f_out]
-    conv = rectifier(conv + bias)
+    conv = rectifier(conv + tf.reshape(bias, [-1, 1, 1, filter_out]))
     return conv
 
 def fully_connected_meta(inp, meta_inp, neurons, rectifier, meta_weight_size=100):
