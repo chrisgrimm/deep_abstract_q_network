@@ -144,10 +144,9 @@ class MovingAverageTable(object):
     def get_prob_terminal(self, s):
         return np.mean(self.terminal_table[s])
 
-
 class RMaxLearner(interfaces.LearningAgent):
 
-    def __init__(self, abs_size, env, abs_func, N=1000, max_VI_iterations=100, VI_delta=0.01, gamma=0.9, rmax=10, max_num_abstract_states=10, frame_history=1):
+    def __init__(self, abs_size, env, abs_func, N=100, max_VI_iterations=100, VI_delta=0.01, gamma=0.9, rmax=10, max_num_abstract_states=10, frame_history=1):
         self.env = env
         self.abs_size = abs_size
         self.abs_func = abs_func
@@ -160,7 +159,7 @@ class RMaxLearner(interfaces.LearningAgent):
         self.gamma = gamma
         self.value_update_counter = 0
         self.value_update_freq = 10
-        self.l0_learner = l0_learner.MultiHeadedDQLearner(abs_size, len(self.env.get_actions_for_state(None)), max_num_abstract_states, frame_history=frame_history)
+        self.l0_learner = l0_learner.MultiHeadedDQLearner(abs_size, len(self.env.get_actions_for_state(None)), max_num_abstract_states, frame_history=frame_history, rmax_learner=self)
         self.actions_for_state = dict()
         self.neighbors = dict()
         self.states = set()
@@ -247,6 +246,7 @@ class RMaxLearner(interfaces.LearningAgent):
         while not self.env.is_current_state_terminal():
 
             s = self.abs_func(self.env.get_current_state())
+
             # need to do additional check here because it is possible to "teleport" without transitioning into a new state
             # to recreate:
             '''
@@ -259,6 +259,7 @@ class RMaxLearner(interfaces.LearningAgent):
                 self.create_new_state(s)
 
             a = self.get_l1_action(s)
+            
             dqn_tuple = (a.initial_state, a.goal_state)
             assert s == a.initial_state
             if a.goal_state is not None and np.random.uniform(0, 1) < 0.1:
@@ -271,6 +272,7 @@ class RMaxLearner(interfaces.LearningAgent):
                 sys.stdout.write('Executing action: %s -- eps: %.6f ... ' % (a, epsilon))
             
             episode_steps, R, sp = self.l0_learner.run_learning_episode(self.env, a.initial_state_vec, a.goal_state_vec, s, a.goal_state, a.dqn_number, self.abs_func, epsilon, max_episode_steps=500)
+            
             if eval_action:
                 self.transition_table.insert_action_evaluation(a, a.goal_state == sp)
             if a.goal_state == sp:

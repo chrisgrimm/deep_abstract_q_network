@@ -161,7 +161,8 @@ class MultiHeadedDQLearner():
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
-                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=1.0, max_dqn_number=300):
+                 use_mmc=False, max_mmc_path_length=1000, mmc_beta=1.0, max_dqn_number=1, rmax_learner=None):
+        self.rmax_learner = rmax_learner
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         config.allow_soft_placement = True
@@ -207,7 +208,7 @@ class MultiHeadedDQLearner():
                 self.q_online_prime = q_constructor(masked_sp_input)
                 print self.q_online_prime
             self.maxQ = tf.gather_nd(self.q_target, tf.transpose(
-                [tf.range(0, 32, dtype=tf.int32), tf.cast(tf.argmax(self.q_online_prime, axis=1), tf.int32)], [1, 0]))
+                [tf.range(0, batch_size, dtype=tf.int32), tf.cast(tf.argmax(self.q_online_prime, axis=1), tf.int32)], [1, 0]))
         else:
             self.maxQ = tf.reduce_max(self.q_target, axis=1)
 
@@ -304,7 +305,7 @@ class MultiHeadedDQLearner():
                        self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2,
                        self.inp_dqn_numbers: DQNNumbers})
         return loss
-
+    
     def run_learning_episode(self, environment, initial_l1_state_vec, goal_l1_state_vec, initial_l1_state, goal_l1_state, dqn_number, abs_func, epsilon, max_episode_steps=100000):
         episode_steps = 0
         total_reward = 0
