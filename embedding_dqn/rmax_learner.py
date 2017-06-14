@@ -8,11 +8,6 @@ from abstraction_tools.abstraction_interfaces import L1Action, AbstractState
 import l0_learner
 
 
-
-
-
-
-
 class MovingAverageTable(object):
 
     def __init__(self, moving_avg_len, num_conf, rmax):

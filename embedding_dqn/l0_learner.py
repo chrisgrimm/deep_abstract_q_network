@@ -153,6 +153,21 @@ def construct_small_network_weights(input, dqn_numbers, dqn_max_number, frame_hi
     return q_values
 
 
+def construct_meta_dqn_network(input, abs_state1, abs_state2, frame_history, num_actions)
+    input = tf.image.convert_image_dtype(input, tf.float32)
+    meta_input = tf.concat([abs_state1, abs_state2], axis=1)
+    with tf.variable_scope('c1'):
+        c1 = th.down_convolution_meta(input, meta_input, 5, 5, 16, leaky_relu)
+    with tf.variable_scope('c2'):
+        c2 = th.down_convolution_meta(c1, meta_input, 5, 5, 4, leaky_relu)
+        N = np.prod([x.value for x in c2.get_shape()[1:]])
+        c2 = tf.reshape(c2, [-1, N])
+    with tf.variable_scope('fc1'):
+        fc1 = th.fully_connected_meta(c2, meta_input, 15, leaky_relu)
+    with tf.variable_scope('fc2'):
+        q_values = th.fully_connected_meta(fc1, meta_input, num_actions, lambda x: x)
+    return q_values
+
 
 
 class MultiHeadedDQLearner():
@@ -188,9 +203,10 @@ class MultiHeadedDQLearner():
         self.gamma = gamma
         self.max_dqn_number = max_dqn_number
         #q_constructor = lambda inp: construct_q_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
-        q_constructor = lambda inp: construct_small_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
+        #q_constructor = lambda inp: construct_small_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
         #q_constructor = lambda inp: construct_dqn_with_embedding_2_layer(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
         #q_constructor = lambda inp: construct_dqn_with_subgoal_embedding(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
+        q_constructor = lambda inp: construct_meta_dqn_network(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
         with tf.variable_scope('online'):
             mask_shape = [-1, 1, 1, frame_history]
             mask = tf.reshape(self.inp_mask, mask_shape)
