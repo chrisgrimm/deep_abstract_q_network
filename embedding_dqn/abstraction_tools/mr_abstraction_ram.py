@@ -1,5 +1,5 @@
 import numpy as np
-from embedding_dqn.rmax_learner import AbstractState
+from abstraction_interfaces import AbstractState
 
 room_index = 3
 
