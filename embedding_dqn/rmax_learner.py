@@ -245,9 +245,6 @@ class RMaxLearner(interfaces.LearningAgent):
                 self.values = self.run_vi(self.values.copy())
             self.value_update_counter += 1
 
-            if R > 0:
-                break
-
         return total_episode_steps, total_reward
 
     def get_l1_action(self, state, evaluation=False):
