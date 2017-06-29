@@ -31,6 +31,8 @@ class MRAbstraction(object):
         self.use_sectors = use_sectors
         self.agent_sector = (1, 2)
         self.old_should_check = True
+        self.update_room_value = None
+        self.updated_room = False
 
     def reset(self):
         self.old_should_check = True
@@ -50,7 +52,7 @@ class MRAbstraction(object):
         new_should_check = (is_walking_or_on_stairs and not is_falling and not death_counter_active and not death_sprite_active)
         should_check = new_should_check and self.old_should_check
         self.old_should_check = new_should_check
-        return should_check
+        return should_check or self.updated_room
     #
     # def bout_to_get_murked(self, ram):
     #     is_falling = ram[88] > 0
@@ -58,19 +60,53 @@ class MRAbstraction(object):
     #     death_sprite_active = ram[54] == 6
     #     return is_falling or death_counter_active or death_sprite_active
 
-    def update_agent_sector(self, ram):
+    def get_agent_position(self, ram):
+        pos_x, pos_y = (ram[0xAA - 0x80] - 0x01) / float(0x98 - 0x01), (ram[0xAB - 0x80] - 0x86) / float(0xFF - 0x86)
+        return pos_x, pos_y
+
+    def update_agent_sector_normal_room(self, ram):
         if self.should_perform_sector_check(ram):
-            pos_x, pos_y = (ram[0xAA - 0x80] - 0x01) / float(0x98 - 0x01), (ram[0xAB - 0x80] - 0x86) / float(0xFF - 0x86)
+            pos_x, pos_y = self.get_agent_position(ram)
             self.agent_sector = np.clip(int(3 * pos_x), 0, 2), np.clip(int(3 * pos_y), 0, 2)
         return self.agent_sector
 
+    def update_agent_sector_water_room(self, ram):
+        if self.should_perform_sector_check(ram):
+            pos_x, pos_y = self.get_agent_position(ram)
+            sectors_room_0 = [(0, 0.2517), (0.2517, 0.7546), (0.7546, 0.912), (0.912, 1.0)]
+            sectors_room_7 = [(0, 0.09245), (0.09245, 0.25496), (0.25496, 0.7516), (0.7516, 1.0)]
+            sectors_room_12 = [(0, 0.24834), (0.24834, 0.40725), (0.40725, 0.5993), (0.5993, 0.75826), (0.75826, 1.0)]
+            room_dict = {0: sectors_room_0, 7: sectors_room_7, 12: sectors_room_12}
+            active_room = room_dict[self.current_room]
+            for sector, (a, b) in enumerate(active_room):
+                if a <= pos_x <= b:
+                    # HAX
+                    self.agent_sector = sector % 3, sector/3
+                    return self.agent_sector
+
+    def update_agent_sector(self, ram):
+        if self.current_room in [0, 7, 12]:
+            return self.update_agent_sector_water_room(ram)
+        else:
+            return self.update_agent_sector_normal_room(ram)
+
     def update_current_room(self, ram):
-        self.current_room = ram[room_index]
+        new_room = ram[room_index]
+        if self.update_room_value is not None:
+            self.current_room = self.update_room_value
+            self.updated_room = True
+        else:
+            self.updated_room = False
+        if new_room != self.current_room:
+            self.update_room_value = new_room
+        else:
+            self.update_room_value = None
+
 
     def update_state(self, ram):
         self.update_global_state(ram)
-        self.update_agent_sector(ram)
         self.update_current_room(ram)
+        self.update_agent_sector(ram)
 
     def get_abstract_state(self):
         return MRAbstractState(self.current_room, self.agent_sector if self.use_sectors else None, self.global_state)
