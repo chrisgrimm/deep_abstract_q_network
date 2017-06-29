@@ -20,11 +20,11 @@ from embedding_dqn.abstraction_tools import mr_abstraction_ram as mr_abs
 # import dq_learner_priors
 from embedding_dqn import rmax_learner
 
-def debug_signal_handler(signal, frame):
-    import pdb
-    pdb.set_trace()
-import signal
-signal.signal(signal.SIGINT, debug_signal_handler)
+# def debug_signal_handler(signal, frame):
+#     import ipdb
+#     ipdb.set_trace()
+# import signal
+# signal.signal(signal.SIGINT, debug_signal_handler)
 
 num_steps = 50000000
 test_interval = 250000
@@ -75,8 +75,6 @@ def train(agent, env, test_epsilon, results_dir):
         env.terminate_on_end_life = True
         start_time = datetime.datetime.now()
         episode_steps, episode_reward = agent.run_learning_episode(env)
-        if episode_reward > 0:
-            env.terminate_on_end_life = False
         end_time = datetime.datetime.now()
         step_num += episode_steps
 
@@ -86,20 +84,20 @@ def train(agent, env, test_epsilon, results_dir):
         # print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
         #     end_time - start_time).total_seconds(), '\tEps:', agent.epsilon
 
-        # steps_until_test -= episode_steps
-        # if steps_until_test <= 0:
-        #     steps_until_test += test_interval
-        #     print 'Evaluating network...'
-        #     episode_rewards, num_explored_states = evaluate_agent_reward(test_frames, env, agent, test_epsilon)
-        #     mean_reward = np.mean(episode_rewards)
-        #
-        #     if mean_reward > best_eval_reward:
-        #         best_eval_reward = mean_reward
-        #         agent.save_network('%s/%s_best_net.ckpt' % (results_dir, game))
-        #
-        #     print 'Mean Reward:', mean_reward, 'Best:', best_eval_reward
-        #     results_file.write('Step: %d -- Mean reward: %.2f -- Num Explored: %s\n' % (step_num, mean_reward, num_explored_states))
-        #     results_file.flush()
+        steps_until_test -= episode_steps
+        if steps_until_test <= 0:
+            steps_until_test += test_interval
+            print 'Evaluating network...'
+            episode_rewards, num_explored_states = evaluate_agent_reward(test_frames, env, agent, test_epsilon)
+            mean_reward = np.mean(episode_rewards)
+
+            if mean_reward > best_eval_reward:
+                best_eval_reward = mean_reward
+                agent.save_network('%s/%s_best_net.ckpt' % (results_dir, game))
+
+            print 'Mean Reward:', mean_reward, 'Best:', best_eval_reward
+            results_file.write('Step: %d -- Mean reward: %.2f -- Num Explored: %s\n' % (step_num, mean_reward, num_explored_states))
+            results_file.flush()
 
 
 def train_rmax_daqn(env, num_actions):
@@ -108,18 +106,18 @@ def train_rmax_daqn(env, num_actions):
     training_epsilon = 0.01
     test_epsilon = 0.001
 
-    frame_history = 1
-    dqn = atari_dqn.AtariDQN(frame_history, num_actions)
-    abs_size = 33
-    abs_func = env.sector_abstraction
+    #frame_history = 1
+    #dqn = atari_dqn.AtariDQN(frame_history, num_actions)
+    #abs_size = 33
+    #abs_func = env.sector_abstraction
 
-    #frame_history = 4
-    #use_sectors = True
-    #abs = mr_abs.MRAbstraction(use_sectors=use_sectors)
-    #env.set_abstraction(abs)
-    #abs.set_env(env)
-    #abs_func = abs.abstraction_function
-    #abs_size = 24 + (9 if use_sectors else 0) + 10
+    frame_history = 1
+    use_sectors = True
+    abs = mr_abs.MRAbstraction(use_sectors=use_sectors)
+    env.set_abstraction(abs)
+    abs.set_env(env)
+    abs_func = abs.abstraction_function
+    abs_size = 24 + (9 if use_sectors else 0) + 10
     
     agent = rmax_learner.RMaxLearner(abs_size, env, abs_func, frame_history=frame_history)
 
@@ -141,7 +139,7 @@ def train_rmax_daqn_sectors(env, num_actions):
     abs_vec_func = sector_abs_vec_func
     abs_size = 15
 
-    #frame_history = 4
+    #frame_history = 1
     #abs_func = env.abstraction
     #abs_vec_func = ma.montezuma_abstraction_vector
     #abs_size = 35 + 9
@@ -188,8 +186,8 @@ def setup_toy_mr_env():
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
-def setup_mr_env():
-    env = mr_environment.MREnvironment(game_dir + '/' + 'montezuma_revenge' + '.bin')
+def setup_mr_env(frame_history_length=1):
+    env = mr_environment.MREnvironment(game_dir + '/' + 'montezuma_revenge' + '.bin', frame_history_length=frame_history_length, use_gui=True)
     num_actions = len(env.ale.getMinimalActionSet())
     return env, num_actions
 
@@ -198,5 +196,5 @@ game = 'mr_100000'
 #train_rmax_daqn(*setup_mr_env())
 # train_rmax_daqn(*setup_mr_env())
 # train_double_dqn(*setup_toy_mr_env())
-# train_rmax_daqn(*setup_mr_env())
-train_rmax_daqn(*setup_toy_mr_env())
+train_rmax_daqn(*setup_mr_env())
+#train_rmax_daqn(*setup_toy_mr_env())

@@ -172,11 +172,11 @@ def construct_meta_dqn_network(input, abs_state1, abs_state2, frame_history, num
 
 class MultiHeadedDQLearner():
 
-    def __init__(self, abs_size, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00025, replay_start_size=500,
+    def __init__(self, abs_size, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00001, replay_start_size=500,
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
-                 use_mmc=False, max_mmc_path_length=1000, mmc_beta=1.0, max_dqn_number=1, rmax_learner=None):
+                 use_mmc=False, max_mmc_path_length=1000, mmc_beta=0.0, max_dqn_number=1, rmax_learner=None):
         self.rmax_learner = rmax_learner
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
