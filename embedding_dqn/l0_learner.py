@@ -157,13 +157,13 @@ def construct_meta_dqn_network(input, abs_state1, abs_state2, frame_history, num
     input = tf.image.convert_image_dtype(input, tf.float32)
     meta_input = tf.concat([abs_state1, abs_state2], axis=1)
     with tf.variable_scope('c1'):
-        c1 = th.down_convolution_meta(input, meta_input, 5, 5, 16, th.selu)
+        c1 = th.down_convolution_meta(input, meta_input, 5, 5, 16, th.leakyRelu())
     with tf.variable_scope('c2'):
-        c2 = th.down_convolution_meta(c1, meta_input, 5, 5, 4, th.selu)
+        c2 = th.down_convolution_meta(c1, meta_input, 5, 5, 4, th.leakyRelu())
         N = np.prod([x.value for x in c2.get_shape()[1:]])
         c2 = tf.reshape(c2, [-1, N])
     with tf.variable_scope('fc1'):
-        fc1 = th.fully_connected_meta(c2, meta_input, 15, th.selu)
+        fc1 = th.fully_connected_meta(c2, meta_input, 15, th.leakyRelu())
     with tf.variable_scope('fc2'):
         q_values = th.fully_connected_meta(fc1, meta_input, num_actions, lambda x: x)
     return q_values

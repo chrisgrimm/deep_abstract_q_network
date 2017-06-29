@@ -37,7 +37,7 @@ def down_convolution_weights(inp, dqn_numbers, max_dqn_number, kernel, stride, f
     conv = rectifier(conv + b)
     return conv
 
-def leakyRelu(x, alpha=0.0001):
+def leakyRelu(x, alpha=0.001):
     return tf.maximum(x, alpha*x)
 
 def down_convolution_meta(data_inp, meta_inp, kernel, stride, filter_out, rectifier, meta_weight_size=100):
