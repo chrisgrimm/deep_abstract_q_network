@@ -18,7 +18,7 @@ import daqn
 num_steps = 50000000
 test_interval = 250000
 test_frames = 125000
-game_dir = './roms'
+game_dir = '../roms'
 
 vis_update_interval = 10000
 

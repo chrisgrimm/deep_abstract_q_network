@@ -157,13 +157,13 @@ def construct_meta_dqn_network(input, abs_state1, abs_state2, frame_history, num
     input = tf.image.convert_image_dtype(input, tf.float32)
     meta_input = tf.concat([abs_state1, abs_state2], axis=1)
     with tf.variable_scope('c1'):
-        c1 = th.down_convolution_meta(input, meta_input, 5, 5, 16, th.selu)
+        c1 = th.down_convolution_meta(input, meta_input, 5, 5, 16, th.leakyRelu)
     with tf.variable_scope('c2'):
-        c2 = th.down_convolution_meta(c1, meta_input, 5, 5, 4, th.selu)
+        c2 = th.down_convolution_meta(c1, meta_input, 5, 5, 4, th.leakyRelu)
         N = np.prod([x.value for x in c2.get_shape()[1:]])
         c2 = tf.reshape(c2, [-1, N])
     with tf.variable_scope('fc1'):
-        fc1 = th.fully_connected_meta(c2, meta_input, 15, th.selu)
+        fc1 = th.fully_connected_meta(c2, meta_input, 15, th.leakyRelu)
     with tf.variable_scope('fc2'):
         q_values = th.fully_connected_meta(fc1, meta_input, num_actions, lambda x: x)
     return q_values
@@ -172,7 +172,7 @@ def construct_meta_dqn_network(input, abs_state1, abs_state2, frame_history, num
 
 class MultiHeadedDQLearner():
 
-    def __init__(self, abs_size, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00001, replay_start_size=500,
+    def __init__(self, abs_size, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00025, replay_start_size=500,
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
@@ -289,27 +289,27 @@ class MultiHeadedDQLearner():
         Aonehot = np.zeros((self.batch_size, self.num_actions), dtype=np.float32)
         Aonehot[range(len(A)), A] = 1
 
-        # # get random sample of neighbors for each Sigma1
-        # SigmaGoal = []
-        # R = []
-        # l0_terminated = []
-        # for (terminal, sigma1, sigma2) in zip(T, Sigma1, Sigma2):
-        #     sigma_goal = random.sample(self.abs_neighbors[tuple(sigma1)], 1)[0]
-        #     SigmaGoal.append(sigma_goal)
-        #
-        #     l1_transitioned = tuple(sigma1) != tuple(sigma2)
-        #     l0_terminated.append(l1_transitioned or terminal)
-        #
-        #     if terminal:
-        #         r = 0
-        #     elif l1_transitioned:
-        #         if tuple(sigma2) == tuple(sigma_goal):
-        #             r = 1
-        #         else:
-        #             r = 0
-        #     else:
-        #         r = 0
-        #     R.append(r)
+        # get random sample of neighbors for each Sigma1
+        SigmaGoal = []
+        R = []
+        l0_terminated = []
+        for (terminal, sigma1, sigma2) in zip(T, Sigma1, Sigma2):
+            sigma_goal = random.sample(self.abs_neighbors[tuple(sigma1)], 1)[0]
+            SigmaGoal.append(sigma_goal)
+
+            l1_transitioned = tuple(sigma1) != tuple(sigma2)
+            l0_terminated.append(l1_transitioned or terminal)
+
+            if terminal:
+                r = 0
+            elif l1_transitioned:
+                if tuple(sigma2) == tuple(sigma_goal):
+                    r = 1
+                else:
+                    r = 0
+            else:
+                r = 0
+            R.append(r)
 
         [_, loss, q_online, maxQ, q_target, r, y, delta_dqn, g] = self.sess.run(
             [self.train_op, self.loss, self.q_online, self.maxQ, self.q_target, self.r, self.y, self.delta_dqn,

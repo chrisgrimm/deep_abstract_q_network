@@ -79,9 +79,14 @@ class ToyMRAbstractState(AbstractState):
     def get_vector_lazy(self):
         onehot_room = [0] * len(room_mapping)
         onehot_room[room_mapping[self.room_tuple]] = 1
+        maxlen_sector = 10
+        onehot_sector = [0] * maxlen_sector
+        onehot_sector[self.sector_num] = 1
         posneg_key_states = [1 if x == True else -1 for x in self.key_states]
         posneg_door_states = [1 if x == True else -1 for x in self.door_states]
-        return onehot_room + [self.sector_num,] + posneg_key_states + posneg_door_states
+        return onehot_room + onehot_sector + posneg_key_states + posneg_door_states
+
+
 
 
 class ToyMR(Environment):
@@ -513,7 +518,7 @@ class ToyMR(Environment):
 if __name__ == "__main__":
     map_file = 'mr_maps/full_mr_map.txt'
     abs_file = 'mr_maps/full_mr_map_abs.txt'
-    game = ToyMR(map_file, abstraction_file=abs_file)
+    game = ToyMR(map_file, abstraction_file=abs_file, use_gui=True)
 
     l1_state = game.sector_abstraction(None)
     print l1_state

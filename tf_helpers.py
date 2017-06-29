@@ -44,15 +44,15 @@ def down_convolution_meta(data_inp, meta_inp, kernel, stride, filter_out, rectif
     batch_size = tf.shape(data_inp)[0]
     filter_in = data_inp.get_shape()[3].value
     with tf.variable_scope('mfc1'):
-        mfc1 = fully_connected(meta_inp, meta_weight_size, rectifier=leakyRelu)
+        mfc1 = fully_connected(meta_inp, meta_weight_size, rectifier=selu)
     with tf.variable_scope('mfc2'):
-        mfc2 = fully_connected(mfc1, meta_weight_size, rectifier=leakyRelu)
+        mfc2 = fully_connected(mfc1, meta_weight_size, rectifier=selu)
     with tf.variable_scope('filters'):
         filter = tf.reshape(fully_connected(mfc2, kernel*kernel*filter_in*filter_out, rectifier=lambda x:x), [-1, kernel, kernel, filter_in, filter_out])
     with tf.variable_scope('mfc3'):
-        mfc3 = fully_connected(meta_inp, meta_weight_size, rectifier=leakyRelu)
+        mfc3 = fully_connected(meta_inp, meta_weight_size, rectifier=selu)
     with tf.variable_scope('mfc4'):
-        mfc4 = fully_connected(mfc3, meta_weight_size, rectifier=leakyRelu)
+        mfc4 = fully_connected(mfc3, meta_weight_size, rectifier=selu)
     with tf.variable_scope('bias'):
         bias = fully_connected(mfc4, filter_out, rectifier=lambda x:x)
 
@@ -80,15 +80,15 @@ def selu(x):
 def fully_connected_meta(inp, meta_inp, neurons, rectifier, meta_weight_size=100):
     inp_size = inp.get_shape()[1].value
     with tf.variable_scope('mfc1'):
-        mfc1 = fully_connected(meta_inp, meta_weight_size, rectifier=selu)
+        mfc1 = fully_connected(meta_inp, meta_weight_size, rectifier=leakyRelu)
     with tf.variable_scope('mfc2'):
-        mfc2 = fully_connected(mfc1, meta_weight_size, rectifier=selu)
+        mfc2 = fully_connected(mfc1, meta_weight_size, rectifier=leakyRelu)
     with tf.variable_scope('weights'):
         weights = tf.reshape(fully_connected(mfc2, inp_size*neurons, rectifier=lambda x:x), [-1, inp_size, neurons])
     with tf.variable_scope('mfc3'):
-        mfc3 = fully_connected(meta_inp, meta_weight_size, rectifier=selu)
+        mfc3 = fully_connected(meta_inp, meta_weight_size, rectifier=leakyRelu)
     with tf.variable_scope('mfc4'):
-        mfc4 = fully_connected(mfc3, meta_weight_size, rectifier=selu)
+        mfc4 = fully_connected(mfc3, meta_weight_size, rectifier=leakyRelu)
     with tf.variable_scope('bias'):
         bias = fully_connected(mfc4, neurons, rectifier=lambda x: x)
     return rectifier(tf.reshape(tf.matmul(tf.reshape(inp, [-1, 1, inp_size]), weights), [-1, neurons]) + bias)

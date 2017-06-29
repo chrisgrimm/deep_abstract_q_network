@@ -101,7 +101,10 @@ class DQLearner(interfaces.LearningAgent):
 
             state = environment.get_current_state()
             if np.random.uniform(0, 1) < self.epsilon:
-                action = np.random.choice(environment.get_actions_for_state(state))
+                if self.replay_buffer.size() <= self.replay_start_size:
+                    action = np.random.choice(environment.get_actions_for_state(state))
+                else:
+                    action = self.get_safe_action(state)
             else:
                 action = self.get_action(state)
 
@@ -109,6 +112,7 @@ class DQLearner(interfaces.LearningAgent):
                 self.epsilon = max(self.epsilon_min, self.epsilon - self.epsilon_delta)
 
             state, action, reward, next_state, is_terminal = environment.perform_action(action)
+            reward = -1 if is_terminal else reward
             total_reward += reward
             self.replay_buffer.append(state[-1], action, reward, next_state[-1], is_terminal)
             if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
@@ -127,6 +131,19 @@ class DQLearner(interfaces.LearningAgent):
                                    feed_dict={self.inp_frames: [state_input],
                                               self.inp_mask: np.ones((1, self.frame_history), dtype=np.float32)})
         return np.argmax(q_values[0])
+
+    def get_safe_action(self, state, threshold=-0.1):
+        size = list(np.array(range(len(self.dqn.get_input_shape()))) + 1)
+        state_input = np.transpose(state, size + [0])
+
+        [q_values] = self.sess.run([self.q_online],
+                                   feed_dict={self.inp_frames: [state_input],
+                                              self.inp_mask: np.ones((1, self.frame_history), dtype=np.float32)})
+        safe_actions = np.where(q_values[0] > threshold)[0]
+        if len(safe_actions) == 0:
+            return np.random.choice(range(self.num_actions))
+        else:
+            return np.random.choice(np.where(q_values[0] > threshold)[0])
 
     def save_network(self, file_name):
         self.saver.save(self.sess, file_name)
