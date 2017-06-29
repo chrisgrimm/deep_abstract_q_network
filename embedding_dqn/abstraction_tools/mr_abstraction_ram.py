@@ -58,9 +58,13 @@ class MRAbstraction(object):
     #     death_sprite_active = ram[54] == 6
     #     return is_falling or death_counter_active or death_sprite_active
 
+    def get_agent_position(self, ram):
+        pos_x, pos_y = (ram[0xAA - 0x80] - 0x01) / float(0x98 - 0x01), (ram[0xAB - 0x80] - 0x86) / float(0xFF - 0x86)
+        return pos_x, pos_y
+
     def update_agent_sector(self, ram):
         if self.should_perform_sector_check(ram):
-            pos_x, pos_y = (ram[0xAA - 0x80] - 0x01) / float(0x98 - 0x01), (ram[0xAB - 0x80] - 0x86) / float(0xFF - 0x86)
+            pos_x, pos_y = self.get_agent_position(ram)
             self.agent_sector = np.clip(int(3 * pos_x), 0, 2), np.clip(int(3 * pos_y), 0, 2)
         return self.agent_sector
 

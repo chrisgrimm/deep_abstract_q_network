@@ -20,7 +20,7 @@ if __name__ == "__main__":
 
     # create Atari environment
     # env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', frame_skip=1, terminate_on_end_life=True)
-    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', frame_skip=1, terminate_on_end_life=True)
+    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', frame_skip=1, terminate_on_end_life=True, use_gui=True)
     num_actions = len(env.ale.getMinimalActionSet())
     abstraction.update_state(env.getRAM())
     l1_state = abstraction.get_abstract_state()
@@ -42,6 +42,7 @@ if __name__ == "__main__":
             print 'TERMINAL'
             env.reset_environment()
             abstraction.update_state(env.getRAM())
+            print abstraction.get_agent_position(env.getRAM())
             l1_state = abstraction.get_abstract_state()
             print l1_state
 
