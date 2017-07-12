@@ -117,7 +117,7 @@ def train_tabular_dqn(env, num_actions):
 
 
 def train_double_dqn(env, num_actions):
-    results_dir = './results/double_dqn/montezuma_revenge'
+    results_dir = './results/double_dqn/' + game
 
     training_epsilon = 0.01
     test_epsilon = 0.001
@@ -189,10 +189,10 @@ def setup_tabular_env():
     return env, num_actions
 
 
-game = 'montezuma_revenge'
-train_double_dqn(*setup_atari_env())
+game = 'freeway'
+# train_dqn(*setup_atari_env())
 # train_dqn(*setup_coin_env())
-# train_double_dqn(*setup_coin_env())
+train_double_dqn(*setup_atari_env())
 # train_daqn(*setup_coin_env())
 # train_daqn_priors(*setup_coin_env())
 # train_dqn_priors(*setup_coin_env())

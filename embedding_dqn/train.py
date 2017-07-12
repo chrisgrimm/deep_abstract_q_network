@@ -14,6 +14,7 @@ import daqn
 #import tabular_dqn
 #import tabular_coin_game
 from embedding_dqn import mr_environment
+from embedding_dqn import oo_rmax_learner
 from embedding_dqn.abstraction_tools import mr_abstraction_ram as mr_abs
 
 # import daqn_clustering
@@ -36,7 +37,7 @@ vis_update_interval = 10000
 
 def evaluate_agent_reward(steps, env, agent, epsilon):
     agent.evaluation_values = agent.run_vi(agent.evaluation_values.copy(), evaluation=True)
-    num_explored_states = len(agent.transition_table.states)
+    num_explored_states = len(agent.states)
 
     env.terminate_on_end_life = False
     env.reset_environment()
@@ -110,18 +111,17 @@ def train_rmax_daqn(env, num_actions):
     training_epsilon = 0.01
     test_epsilon = 0.001
 
-    #frame_history = 1
-    #dqn = atari_dqn.AtariDQN(frame_history, num_actions)
-    #abs_size = 33
-    #abs_func = env.sector_abstraction
-
     frame_history = 1
-    use_sectors = True
-    abs = mr_abs.MRAbstraction(use_sectors=use_sectors)
-    env.set_abstraction(abs)
-    abs.set_env(env)
-    abs_func = abs.abstraction_function
-    abs_size = 24 + (9 if use_sectors else 0) + 10
+    abs_size = 33
+    abs_func = env.sector_abstraction
+
+    # frame_history = 1
+    # use_sectors = True
+    # abs = mr_abs.MRAbstraction(use_sectors=use_sectors)
+    # env.set_abstraction(abs)
+    # abs.set_env(env)
+    # abs_func = abs.abstraction_function
+    # abs_size = 24 + (9 if use_sectors else 0) + 10
 
     agent = rmax_learner.RMaxLearner(abs_size, env, abs_func, frame_history=frame_history)
 
@@ -149,6 +149,30 @@ def train_rmax_daqn_sectors(env, num_actions):
     #abs_size = 35 + 9
     
     agent = rmax_learner.RMaxLearner(abs_size, env, abs_func, frame_history=frame_history)
+
+    train(agent, env, test_epsilon, results_dir)
+
+
+def train_oo_rmax_daqn(env, num_actions):
+    results_dir = './results/rmax_daqn/%s_fixed_terminal' % game
+
+    training_epsilon = 0.01
+    test_epsilon = 0.001
+
+    frame_history = 1
+    abs_size = 33
+    abs_func = env.oo_sector_abstraction
+    pred_func = env.predicate_func
+
+    # frame_history = 1
+    # use_sectors = True
+    # abs = mr_abs.MRAbstraction(use_sectors=use_sectors)
+    # env.set_abstraction(abs)
+    # abs.set_env(env)
+    # abs_func = abs.abstraction_function
+    # abs_size = 24 + (9 if use_sectors else 0) + 10
+
+    agent = oo_rmax_learner.OORMaxLearner(abs_size, env, abs_func, pred_func, frame_history=frame_history)
 
     train(agent, env, test_epsilon, results_dir)
 
@@ -200,6 +224,7 @@ game = 'toy_mr_100000'
 #train_rmax_daqn(*setup_mr_env())
 # train_rmax_daqn(*setup_mr_env())
 # train_double_dqn(*setup_toy_mr_env())
-train_rmax_daqn(*setup_mr_env())
-#train_rmax_daqn(*setup_toy_mr_env())
-#train_rmax_daqn_sectors(*setup_toy_mr_env())
+
+# train_rmax_daqn(*setup_mr_env())
+# train_rmax_daqn(*setup_toy_mr_env())
+train_oo_rmax_daqn(*setup_toy_mr_env())

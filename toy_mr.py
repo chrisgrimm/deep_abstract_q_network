@@ -155,6 +155,9 @@ class ToyMR(Environment):
                     for c, char in enumerate(line):
                         room[c, r] = char
                     r += 1
+        if r >= 0:
+            rooms[curr_loc] = room
+
         # construct numeric representation of each sector
         rooms_numeric_repr = {}
         for room_xy, room_sector_dict in rooms.items():
@@ -208,11 +211,8 @@ class ToyMR(Environment):
         if starting_room is None or starting_cell is None:
             raise Exception('You must specify a starting location and goal room')
         return rooms, starting_room, starting_cell, goal_room, keys, doors
-    #@profile
-    def perform_action(self, action):
 
-        start_state = self.get_current_state()
-
+    def _move_agent(self, action):
         dx = 0
         dy = 0
         if action == NORTH:
@@ -224,7 +224,13 @@ class ToyMR(Environment):
         elif action == WEST:
             dx = -1
 
-        new_agent = (self.agent[0] + dx, self.agent[1] + dy)
+        return (self.agent[0] + dx, self.agent[1] + dy)
+
+    def perform_action(self, action):
+
+        start_state = self.get_current_state()
+
+        new_agent = self._move_agent(action)
         reward = 0
 
         # room transition checks
@@ -253,7 +259,7 @@ class ToyMR(Environment):
                 if self.num_keys > 0:
                     new_room.doors.remove(new_agent)
                     self.num_keys -= 1
-                    self.doors[(self.room.loc, new_agent)] = False
+                    self.doors[(new_room.loc, new_agent)] = False
 
                     self.room = new_room
                     self.agent = new_agent
@@ -335,12 +341,61 @@ class ToyMR(Environment):
     def get_current_state(self):
         return [self.state]
 
+    def sector_for_loc(self, room_loc, pos):
+        return self.rooms_abs_numeric_map[room_loc][self.rooms_abs[room_loc][pos]]
+
     def sector_abstraction(self, state):
         if self.rooms_abs is None:
             raise Exception('Cant use sector abstraction if no abstraction file is provided to ToyMR constructor.')
         sector = self.rooms_abs_numeric_map[self.room.loc][self.rooms_abs[self.room.loc][self.agent]]
         #return self.room.loc + (sector,) + tuple(np.array(self.keys.values(), dtype=int)) + tuple(np.array(self.doors.values(), dtype=int))
         return ToyMRAbstractState(self.room.loc, sector, self.keys.values(), self.doors.values())
+
+    def oo_sector_abstraction(self, state):
+        if self.rooms_abs is None:
+            raise Exception('Cant use sector abstraction if no abstraction file is provided to ToyMR constructor.')
+        sector = self.sector_for_loc(self.room.loc, self.agent)
+
+        # create attributes
+        attrs = dict()
+        loc_att = (self.room.loc, sector)
+        attrs['.loc'] = loc_att
+        attrs['.num_keys'] = self.num_keys
+
+        for i, val in enumerate(self.keys.values()):
+            attrs['key_%s' % i] = val
+
+        for i, val in enumerate(self.doors.values()):
+            attrs['door_%s' % i] = val
+
+        return tuple(sorted(attrs.items()))
+
+    def predicate_func(self, l1_state):
+
+        s = dict(l1_state)
+        (room, sector) = s['.loc']
+        num_keys = s['.num_keys']
+
+        # create predicates
+        preds = dict()
+        for i, (key_room, key_pos) in enumerate(self.keys):
+            pred = False
+            if key_room == room:
+                key_sector = self.sector_for_loc(key_room, key_pos)
+                pred = sector == key_sector and s['key_%s' % i]
+            preds['key_%s_in' % i] = pred
+        for i, (door_room, door_pos) in enumerate(self.doors):
+            pred = False
+            pred_key_door = False
+            if door_room == room:
+                door_sector = self.sector_for_loc(door_room, door_pos)
+                pred = sector == door_sector and s['door_%s' % i]
+                pred_key_door = pred and num_keys >= 1
+            preds['door_%s_in' % i] = pred
+            preds['door_key_%s_in' % i] = pred_key_door
+
+        return tuple(sorted(preds.items()))
+
 
     #def sector_abstraction(self, state):
     #    sector = -1
@@ -386,6 +441,12 @@ class ToyMR(Environment):
     def is_current_state_terminal(self):
         return self.terminal or self.action_ticker > self.max_num_actions
 
+    def is_action_safe(self, action):
+        new_agent = self._move_agent(action)
+        if new_agent in self.room.traps:
+            return False
+        return True
+
     def render_screen(self):
         # clear screen
         self.screen.fill(BACKGROUND_COLOR)
@@ -419,7 +480,7 @@ class ToyMR(Environment):
         # draw hud
         for i in range(self.num_keys):
             #self.screen.blit(self.key_image, (i * (self.hud_height + 2), 0))
-            self.draw_rect((i * (self.hud_height + 2), 0), KEY_COLOR)
+            self.draw_rect((i * (self.hud_height + 2), -1), KEY_COLOR)
 
     def render_screen_generated(self, name, walls, keys, doors, traps, agents):
         # clear screen
@@ -454,7 +515,6 @@ class ToyMR(Environment):
             self.draw_rect(coord, AGENT_COLOR)
 
         pygame.image.save(self.screen, './' + name + '.png')
-
 
     def draw_probability_screen(self, name, positions, intensities):
         # clear screen
@@ -494,7 +554,6 @@ class ToyMR(Environment):
 
         pygame.image.save(self.screen, './'+name+'.png')
 
-
     def draw(self):
         self.render_screen()
 
@@ -520,8 +579,8 @@ if __name__ == "__main__":
     abs_file = 'mr_maps/full_mr_map_abs.txt'
     game = ToyMR(map_file, abstraction_file=abs_file, use_gui=True)
 
-    l1_state = game.sector_abstraction(None)
-    print l1_state
+    l1_state = game.oo_sector_abstraction(None)
+    print l1_state, game.predicate_func(l1_state)
 
     running = True
     while running:
@@ -544,10 +603,10 @@ if __name__ == "__main__":
                 if action != -1:
                     game.perform_action(action)
 
-                    new_l1_state = game.sector_abstraction(None)
+                    new_l1_state = game.oo_sector_abstraction(None)
                     if new_l1_state != l1_state:
                         l1_state = new_l1_state
-                        print l1_state
+                        print l1_state, game.predicate_func(l1_state)
 
                     if game.is_current_state_terminal():
                         game.reset_environment()

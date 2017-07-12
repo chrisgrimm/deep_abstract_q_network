@@ -78,7 +78,7 @@ class MovingAverageTable(object):
 
 class RMaxLearner(interfaces.LearningAgent):
 
-    def __init__(self, abs_size, env, abs_func, N=100, max_VI_iterations=100, VI_delta=0.01, gamma=0.9, rmax=10, max_num_abstract_states=10, frame_history=1):
+    def __init__(self, abs_size, env, abs_func, N=1000, max_VI_iterations=100, VI_delta=0.01, gamma=0.99, rmax=10, max_num_abstract_states=10, frame_history=1):
         self.env = env
         self.abs_size = abs_size
         self.abs_func = abs_func
@@ -262,6 +262,11 @@ class RMaxLearner(interfaces.LearningAgent):
 
     def get_action(self, state, abs_state, evaluation=False):
         l1_state = self.abs_func(state)
+
+        # check if we've ever seen this state
+        if l1_state not in self.states:
+            return 0
+
         l1_action = self.get_l1_action(l1_state, evaluation=evaluation)
         return self.l0_learner.get_action(state, l1_action.initial_state_vec, l1_action.goal_state_vec, l1_action.dqn_number)
 

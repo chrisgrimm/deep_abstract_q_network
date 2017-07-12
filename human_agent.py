@@ -33,7 +33,7 @@ if __name__ == "__main__":
     down = False
     fire = False
 
-    fps = 30
+    fps = 60
 
     last_update = datetime.datetime.now()
     update_time = datetime.timedelta(milliseconds=1000 / fps)

@@ -17,7 +17,7 @@ class L1Action(object):
     def get_key(self):
         initial_state_key = () if self.initial_state is None else self.initial_state.get_key()
         goal_state_key = () if self.goal_state is None else self.goal_state.get_key()
-        return (initial_state_key, goal_state_key, self.dqn_number)
+        return (initial_state_key, goal_state_key)
 
     def __hash__(self):
         return hash(self.get_key())
