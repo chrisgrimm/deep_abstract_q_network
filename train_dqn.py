@@ -117,12 +117,12 @@ def train_tabular_dqn(env, num_actions):
 
 
 def train_double_dqn(env, num_actions):
-    results_dir = './results/double_dqn/wind_tunnel'
+    results_dir = './results/double_dqn/' + game
 
     training_epsilon = 0.01
     test_epsilon = 0.001
 
-    frame_history = 1
+    frame_history = 4
     dqn = atari_dqn.AtariDQN(frame_history, num_actions)
     agent = dq_learner.DQLearner(dqn, num_actions, frame_history=frame_history, epsilon_end=training_epsilon)
 
@@ -169,7 +169,7 @@ def train_daqn(env, num_actions):
 
 def setup_atari_env():
     # create Atari environment
-    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin')
+    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', use_gui=True)
     num_actions = len(env.ale.getMinimalActionSet())
     return env, num_actions
 
@@ -189,10 +189,10 @@ def setup_tabular_env():
     return env, num_actions
 
 
-game = 'pong'
-train_dqn(*setup_atari_env())
+game = 'freeway'
+# train_dqn(*setup_atari_env())
 # train_dqn(*setup_coin_env())
-# train_double_dqn(*setup_coin_env())
+train_double_dqn(*setup_atari_env())
 # train_daqn(*setup_coin_env())
 # train_daqn_priors(*setup_coin_env())
 # train_dqn_priors(*setup_coin_env())

@@ -49,7 +49,7 @@ class DQLearner(interfaces.LearningAgent):
         use_backup = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32)
         self.y = self.r + use_backup * gamma * self.maxQ
         self.delta = tf.reduce_sum(self.inp_actions * self.q_online, reduction_indices=1) - self.y
-        self.error = tf.select(tf.abs(self.delta) < error_clip, 0.5 * tf.square(self.delta),
+        self.error = tf.where(tf.abs(self.delta) < error_clip, 0.5 * tf.square(self.delta),
                                error_clip * tf.abs(self.delta))
         self.loss = tf.reduce_sum(self.error)
         self.g = tf.gradients(self.loss, self.q_online)

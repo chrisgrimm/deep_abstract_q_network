@@ -157,22 +157,22 @@ def construct_meta_dqn_network(input, abs_state1, abs_state2, frame_history, num
     input = tf.image.convert_image_dtype(input, tf.float32)
     meta_input = tf.concat([abs_state1, abs_state2], axis=1)
     with tf.variable_scope('c1'):
-        c1 = th.down_convolution_meta(input, meta_input, 5, 5, 16, th.selu)
+        c1 = th.down_convolution_meta(input, meta_input, 5, 5, 16, th.selu, meta_weight_size=500)
     with tf.variable_scope('c2'):
-        c2 = th.down_convolution_meta(c1, meta_input, 5, 5, 4, th.selu)
+        c2 = th.down_convolution_meta(c1, meta_input, 5, 5, 4, th.selu, meta_weight_size=500)
         N = np.prod([x.value for x in c2.get_shape()[1:]])
         c2 = tf.reshape(c2, [-1, N])
     with tf.variable_scope('fc1'):
-        fc1 = th.fully_connected_meta(c2, meta_input, 15, th.selu)
+        fc1 = th.fully_connected_meta(c2, meta_input, 15, th.selu, meta_weight_size=500)
     with tf.variable_scope('fc2'):
-        q_values = th.fully_connected_meta(fc1, meta_input, num_actions, lambda x: x)
+        q_values = th.fully_connected_meta(fc1, meta_input, num_actions, lambda x: x, meta_weight_size=500)
     return q_values
 
 
 
 class MultiHeadedDQLearner():
 
-    def __init__(self, abs_size, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00001, replay_start_size=500,
+    def __init__(self, abs_size, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00025, replay_start_size=500,
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
@@ -204,10 +204,10 @@ class MultiHeadedDQLearner():
         self.gamma = gamma
         self.max_dqn_number = max_dqn_number
         #q_constructor = lambda inp: construct_q_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
-        #q_constructor = lambda inp: construct_small_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
-        #q_constructor = lambda inp: construct_dqn_with_embedding_2_layer(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
-        #q_constructor = lambda inp: construct_dqn_with_subgoal_embedding(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
-        q_constructor = lambda inp: construct_meta_dqn_network(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
+        q_constructor = lambda inp: construct_small_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
+        # q_constructor = lambda inp: construct_dqn_with_embedding_2_layer(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
+        # q_constructor = lambda inp: construct_dqn_with_subgoal_embedding(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
+        # q_constructor = lambda inp: construct_meta_dqn_network(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
         with tf.variable_scope('online'):
             mask_shape = [-1, 1, 1, frame_history]
             mask = tf.reshape(self.inp_mask, mask_shape)
@@ -331,15 +331,15 @@ class MultiHeadedDQLearner():
         if dqn_tuple not in self.epsilon:
             self.epsilon[dqn_tuple] = 1.0
 
-        key_init = tuple(initial_l1_state_vec)
-        if not self.abs_neighbors.has_key(key_init):
-            self.abs_neighbors[key_init] = set()
-            self.abs_neighbors[key_init].add(key_init)
+        # key_init = tuple(initial_l1_state_vec)
+        # if not self.abs_neighbors.has_key(key_init):
+        #     self.abs_neighbors[key_init] = set()
+        #     self.abs_neighbors[key_init].add(key_init)
 
-        option_key = (key_init, tuple(goal_l1_state_vec),)
-        if not self.state_samples_for_option.has_key(option_key):
-            self.state_samples_for_option[option_key] = []
-            self.option_action_ticker[option_key] = 0
+        # option_key = (key_init, tuple(goal_l1_state_vec),)
+        # if not self.state_samples_for_option.has_key(option_key):
+        #     self.state_samples_for_option[option_key] = []
+        #     self.option_action_ticker[option_key] = 0
 
         for steps in range(max_episode_steps):
             if environment.is_current_state_terminal():
@@ -357,7 +357,8 @@ class MultiHeadedDQLearner():
             #                                 goal_l1_state)
 
             if np.random.uniform(0, 1) < epsilon:
-                action = np.random.choice(environment.get_actions_for_state(state))
+                # action = np.random.choice(environment.get_actions_for_state(state))
+                action = self.get_safe_explore_action(state, environment)
             else:
                 action = self.get_action(state, initial_l1_state_vec, goal_l1_state_vec, dqn_number)
 
@@ -368,8 +369,8 @@ class MultiHeadedDQLearner():
             total_reward += env_reward
 
             new_l1_state = abs_func(state)
-            if initial_l1_state != new_l1_state:
-                self.abs_neighbors[key_init].add(tuple(new_l1_state.get_vector()))
+            # if initial_l1_state != new_l1_state:
+            #     self.abs_neighbors[key_init].add(tuple(new_l1_state.get_vector()))
 
             if initial_l1_state != new_l1_state or is_terminal:
                 reward = 1 if new_l1_state == goal_l1_state else 0
@@ -428,6 +429,15 @@ class MultiHeadedDQLearner():
                                               self.inp_abs_state_goal: [goal_l1_state_vec],
                                               self.inp_dqn_numbers: [dqn_number]})
         return np.argmax(q_values[0])
+
+    def get_safe_explore_action(self, state, environment):
+        all_actions = environment.get_actions_for_state(state)
+        safe_actions = []
+        for a in all_actions:
+            if environment.is_action_safe(a):
+                safe_actions.append(a)
+
+        return np.random.choice(safe_actions)
 
     def save_network(self, file_name):
         self.saver.save(self.sess, file_name)
