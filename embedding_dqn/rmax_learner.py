@@ -260,7 +260,7 @@ class RMaxLearner(interfaces.LearningAgent):
         action = np.random.choice(np.array(keys)[np.array(values) == np.max(values)])
         return action
 
-    def get_action(self, state, evaluation=False):
+    def get_action(self, state, abs_state, evaluation=False):
         l1_state = self.abs_func(state)
 
         # check if we've ever seen this state

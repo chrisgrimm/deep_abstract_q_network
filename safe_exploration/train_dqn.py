@@ -18,7 +18,7 @@ import daqn
 num_steps = 50000000
 test_interval = 250000
 test_frames = 125000
-game_dir = './roms'
+game_dir = '../roms'
 
 vis_update_interval = 10000
 
@@ -117,7 +117,7 @@ def train_tabular_dqn(env, num_actions):
 
 
 def train_double_dqn(env, num_actions):
-    results_dir = './results/double_dqn/' + game
+    results_dir = './results/double_dqn/montezuma_revenge'
 
     training_epsilon = 0.01
     test_epsilon = 0.001
@@ -189,10 +189,10 @@ def setup_tabular_env():
     return env, num_actions
 
 
-game = 'freeway'
-# train_dqn(*setup_atari_env())
-# train_dqn(*setup_coin_env())
+game = 'montezuma_revenge'
 train_double_dqn(*setup_atari_env())
+# train_dqn(*setup_coin_env())
+# train_double_dqn(*setup_coin_env())
 # train_daqn(*setup_coin_env())
 # train_daqn_priors(*setup_coin_env())
 # train_dqn_priors(*setup_coin_env())

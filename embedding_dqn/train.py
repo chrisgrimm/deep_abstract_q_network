@@ -49,10 +49,12 @@ def evaluate_agent_reward(steps, env, agent, epsilon):
             total_reward = 0
             env.reset_environment()
         state = env.get_current_state()
+        abs_state = env.sector_abstraction(state)
         if np.random.uniform(0, 1) < epsilon:
             action = np.random.choice(env.get_actions_for_state(state))
         else:
-            action = agent.get_action(state, evaluation=True)
+
+            action = agent.get_action(state, abs_state, evaluation=True)
 
         state, action, reward, next_state, is_terminal = env.perform_action(action)
         total_reward += reward
@@ -118,7 +120,7 @@ def train_rmax_daqn(env, num_actions):
     # abs.set_env(env)
     # abs_func = abs.abstraction_function
     # abs_size = 24 + (9 if use_sectors else 0) + 10
-    
+
     agent = rmax_learner.RMaxLearner(abs_size, env, abs_func, frame_history=frame_history)
 
     train(agent, env, test_epsilon, results_dir)
@@ -137,14 +139,14 @@ def train_rmax_daqn_sectors(env, num_actions):
     frame_history = 1
     abs_func = env.sector_abstraction
     abs_vec_func = sector_abs_vec_func
-    abs_size = 15
+    abs_size = 42
 
     #frame_history = 1
     #abs_func = env.abstraction
     #abs_vec_func = ma.montezuma_abstraction_vector
     #abs_size = 35 + 9
     
-    agent = rmax_learner.RMaxLearner(abs_size, env, abs_vec_func, abs_func, frame_history=frame_history)
+    agent = rmax_learner.RMaxLearner(abs_size, env, abs_func, frame_history=frame_history)
 
     train(agent, env, test_epsilon, results_dir)
 
@@ -216,7 +218,7 @@ def setup_mr_env(frame_history_length=1):
     return env, num_actions
 
 
-game = 'mr_100000'
+game = 'toy_mr_100000'
 #train_rmax_daqn(*setup_mr_env())
 # train_rmax_daqn(*setup_mr_env())
 # train_double_dqn(*setup_toy_mr_env())
