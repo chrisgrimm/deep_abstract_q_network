@@ -20,9 +20,11 @@ if __name__ == "__main__":
 
     # create Atari environment
     # env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', frame_skip=1, terminate_on_end_life=True)
-    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', frame_skip=1, terminate_on_end_life=True, use_gui=True)
+    env = mr_environment.MREnvironment(game_dir + '/' + game + '.bin', frame_skip=1, terminate_on_end_life=True, use_gui=True)
+    env.set_abstraction(abstraction)
     num_actions = len(env.ale.getMinimalActionSet())
     abstraction.update_state(env.getRAM())
+    abstraction.env = env
     l1_state = abstraction.get_abstract_state()
 
     right = False
@@ -88,8 +90,13 @@ if __name__ == "__main__":
             action = bitKeysMap[bitfield]
             env.perform_atari_action(action)
 
-            abstraction.update_state(env.getRAM())
-            new_l1_state = abstraction.get_abstract_state()
+            new_l1_state = abstraction.abstraction_function(None)
+
+            if new_l1_state != l1_state:
+                l1_state = new_l1_state
+                print l1_state
+
+            new_l1_state = abstraction.abstraction_function(None)
 
             if new_l1_state != l1_state:
                 l1_state = new_l1_state

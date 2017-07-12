@@ -176,7 +176,7 @@ class MultiHeadedDQLearner():
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
-                 use_mmc=False, max_mmc_path_length=1000, mmc_beta=0.0, max_dqn_number=1, rmax_learner=None):
+                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=0.5, max_dqn_number=1, rmax_learner=None):
         self.rmax_learner = rmax_learner
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
@@ -205,9 +205,9 @@ class MultiHeadedDQLearner():
         self.max_dqn_number = max_dqn_number
         #q_constructor = lambda inp: construct_q_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
         #q_constructor = lambda inp: construct_small_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
-        #q_constructor = lambda inp: construct_dqn_with_embedding_2_layer(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
+        q_constructor = lambda inp: construct_dqn_with_embedding_2_layer(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
         #q_constructor = lambda inp: construct_dqn_with_subgoal_embedding(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
-        q_constructor = lambda inp: construct_meta_dqn_network(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
+        # q_constructor = lambda inp: construct_meta_dqn_network(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
         with tf.variable_scope('online'):
             mask_shape = [-1, 1, 1, frame_history]
             mask = tf.reshape(self.inp_mask, mask_shape)

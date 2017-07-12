@@ -48,7 +48,9 @@ def evaluate_agent_reward(steps, env, agent, epsilon):
             total_reward = 0
             env.reset_environment()
         state = env.get_current_state()
-        abs_state = env.sector_abstraction(state)
+        abs_state = env.abstraction.abstraction_function(state)
+        #abs_state = env.sector_abstraction(state)
+        #env.
         if np.random.uniform(0, 1) < epsilon:
             action = np.random.choice(env.get_actions_for_state(state))
         else:
@@ -198,6 +200,6 @@ game = 'toy_mr_100000'
 #train_rmax_daqn(*setup_mr_env())
 # train_rmax_daqn(*setup_mr_env())
 # train_double_dqn(*setup_toy_mr_env())
-#train_rmax_daqn(*setup_mr_env())
+train_rmax_daqn(*setup_mr_env())
 #train_rmax_daqn(*setup_toy_mr_env())
-train_rmax_daqn_sectors(*setup_toy_mr_env())
+#train_rmax_daqn_sectors(*setup_toy_mr_env())

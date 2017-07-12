@@ -12,7 +12,8 @@ class MREnvironment(atari.AtariEnvironment):
             self.perform_action(0)
 
         super(MREnvironment, self).reset_environment()
-        self.abstraction.reset()
+        if self.current_lives >= 6:
+            self.abstraction.reset(self.getRAM())
 
     # def perform_action(self, onehot_index_action):
     #     state, atari_action, reward, next_state, is_terminal = super(MREnvironment, self).perform_action(onehot_index_action)

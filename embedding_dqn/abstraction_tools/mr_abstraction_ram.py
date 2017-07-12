@@ -33,9 +33,11 @@ class MRAbstraction(object):
         self.old_should_check = True
         self.update_room_value = None
         self.updated_room = False
+        self.old_RAM = None
 
-    def reset(self):
+    def reset(self, ram):
         self.old_should_check = True
+        self.update_state(ram, hard=True)
 
     def set_env(self, env):
         self.env = env
@@ -65,32 +67,33 @@ class MRAbstraction(object):
         return pos_x, pos_y
 
     def update_agent_sector_normal_room(self, ram):
-        if self.should_perform_sector_check(ram):
-            pos_x, pos_y = self.get_agent_position(ram)
-            self.agent_sector = np.clip(int(3 * pos_x), 0, 2), np.clip(int(3 * pos_y), 0, 2)
-        return self.agent_sector
+        pos_x, pos_y = self.get_agent_position(ram)
+        self.agent_sector = np.clip(int(3 * pos_x), 0, 2), np.clip(int(3 * pos_y), 0, 2)
 
     def update_agent_sector_water_room(self, ram):
-        if self.should_perform_sector_check(ram):
-            pos_x, pos_y = self.get_agent_position(ram)
-            sectors_room_0 = [(0, 0.2517), (0.2517, 0.7546), (0.7546, 0.912), (0.912, 1.0)]
-            sectors_room_7 = [(0, 0.09245), (0.09245, 0.25496), (0.25496, 0.7516), (0.7516, 1.0)]
-            sectors_room_12 = [(0, 0.24834), (0.24834, 0.40725), (0.40725, 0.5993), (0.5993, 0.75826), (0.75826, 1.0)]
-            room_dict = {0: sectors_room_0, 7: sectors_room_7, 12: sectors_room_12}
-            active_room = room_dict[self.current_room]
-            for sector, (a, b) in enumerate(active_room):
-                if a <= pos_x <= b:
-                    # HAX
-                    self.agent_sector = sector % 3, sector/3
-                    return self.agent_sector
+        pos_x, pos_y = self.get_agent_position(ram)
+        sectors_room_0 = [(0, 0.2517), (0.2517, 0.7546), (0.7546, 0.912), (0.912, 1.0)]
+        sectors_room_7 = [(0, 0.09245), (0.09245, 0.25496), (0.25496, 0.7516), (0.7516, 1.0)]
+        sectors_room_12 = [(0, 0.24834), (0.24834, 0.40725), (0.40725, 0.5993), (0.5993, 0.75826), (0.75826, 1.0)]
+        room_dict = {0: sectors_room_0, 7: sectors_room_7, 12: sectors_room_12}
+        active_room = room_dict[self.current_room]
+        for sector, (a, b) in enumerate(active_room):
+            if a <= pos_x <= b:
+                # HAX
+                self.agent_sector = sector % 3, sector/3
 
-    def update_agent_sector(self, ram):
-        if self.current_room in [0, 7, 12]:
-            return self.update_agent_sector_water_room(ram)
-        else:
-            return self.update_agent_sector_normal_room(ram)
+    def update_agent_sector(self, ram, hard=False):
+        if hard or self.should_perform_sector_check(ram):
+            if self.current_room in [0, 7, 12]:
+                self.update_agent_sector_water_room(ram)
+            else:
+                self.update_agent_sector_normal_room(ram)
 
-    def update_current_room(self, ram):
+    def update_current_room(self, ram, hard=False):
+        if hard:
+            self.current_room = ram[room_index]
+            return
+
         new_room = ram[room_index]
         if self.update_room_value is not None:
             self.current_room = self.update_room_value
@@ -102,18 +105,21 @@ class MRAbstraction(object):
         else:
             self.update_room_value = None
 
-
-    def update_state(self, ram):
+    def update_state(self, ram, hard=False):
         self.update_global_state(ram)
-        self.update_current_room(ram)
-        self.update_agent_sector(ram)
+        self.update_current_room(ram, hard=hard)
+        self.update_agent_sector(ram, hard=hard)
 
     def get_abstract_state(self):
         return MRAbstractState(self.current_room, self.agent_sector if self.use_sectors else None, self.global_state)
 
     def abstraction_function(self, x):
-        self.update_state(self.env.getRAM())
+        new_RAM = self.env.getRAM()
+        if np.any(new_RAM != self.old_RAM):
+            self.update_state(new_RAM)
+            self.old_RAM = new_RAM
         return self.get_abstract_state()
+
 
 class MRAbstractState(AbstractState):
 
