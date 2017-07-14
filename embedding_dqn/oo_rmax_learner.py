@@ -4,6 +4,7 @@ import numpy as np
 import sys
 
 from embedding_dqn import oo_l0_learner
+from embedding_dqn import value_iteration
 
 
 class L1ExploreAction(object):
@@ -155,7 +156,7 @@ class MovingAverageTable(object):
 
 
 class OORMaxLearner(interfaces.LearningAgent):
-    def __init__(self, abs_size, env, abs_func, pred_func, N=1000, max_VI_iterations=100, VI_delta=0.01, gamma=0.99, rmax=1,
+    def __init__(self, abs_size, env, abs_func, pred_func, N=1000, max_VI_iterations=100, value_update_freq=1000, VI_delta=0.01, gamma=0.99, rmax=1,
                  max_num_abstract_states=10, frame_history=1):
         self.env = env
         self.abs_size = abs_size
@@ -165,12 +166,15 @@ class OORMaxLearner(interfaces.LearningAgent):
         self.gamma = gamma
         self.utopia_val = self.rmax / (1 - self.gamma)
         self.transition_table = MovingAverageTable(N, 100, pred_func)
-        self.max_VI_iterations = max_VI_iterations
-        self.VI_delta = VI_delta
+        self.value_iteration = value_iteration.ValueIteration(gamma, max_VI_iterations, VI_delta)
         self.values = dict()
+        self.qs = dict()
         self.evaluation_values = dict()
+        self.evaluation_qs = dict()
+        self.last_evaluation_state = None
+        self.last_evaluation_action = None
         self.value_update_counter = 0
-        self.value_update_freq = 10
+        self.value_update_freq = value_update_freq
         self.l0_learner = oo_l0_learner.MultiHeadedDQLearner(abs_size, len(self.env.get_actions_for_state(None)),
                                                           max_num_abstract_states, frame_history=frame_history,
                                                           rmax_learner=self)
@@ -181,10 +185,11 @@ class OORMaxLearner(interfaces.LearningAgent):
         self.states = set()
         self.current_dqn_number = 0
         self.create_new_state(self.abs_func(self.env.get_current_state()))
+        self.run_vi()
 
     def create_new_state(self, state):
         self.states.add(state)
-        self.values[state] = 0
+        self.values[state] = self.utopia_val
         self.evaluation_values[state] = 0
 
         # create explore actions for each attribute:
@@ -218,6 +223,9 @@ class OORMaxLearner(interfaces.LearningAgent):
 
         self.current_dqn_number += 1
 
+        self.populate_imagined_states()
+        self.run_vi()
+
         print 'Found new action: %s' % (new_action,)
 
     def populate_imagined_states(self):
@@ -234,19 +242,39 @@ class OORMaxLearner(interfaces.LearningAgent):
                             if sp not in self.states:
                                 self.create_new_state(sp)
 
-    def run_vi(self, values, evaluation=False):
-        new_values = dict()
-        for i in xrange(self.max_VI_iterations):
-            stop = True
-            for s in self.states:
-                new_values[s] = np.max(self.calculate_qs(s, values, evaluation=evaluation).values())
+    def run_vi(self, evaluation=False):
+        actions_for_state = dict()
+        transitions = dict()
 
-                if s in values and np.abs(new_values[s] - values[s]) > self.VI_delta:
-                    stop = False
-            values = new_values.copy()
-            if stop:
-                break
-        return values
+        for s in self.states:
+            actions = self.get_all_actions_for_state(s)
+            actions_for_state[s] = actions
+            for a in actions:
+                transitions_sa = []
+                if a in self.transition_table.a_count and \
+                        (self.transition_table.a_count[a] >= self.transition_table.num_conf or evaluation) and \
+                                a in self.transition_table.valid_transitions:
+                    Z = np.sum(
+                        [self.transition_table.get_p(s, a, apply_diff(s, diff)) for diff in
+                         self.transition_table.valid_transitions[a] if does_diff_apply(s, diff)])
+                    for diff in self.transition_table.valid_transitions[a]:
+                        if not does_diff_apply(s, diff):
+                            continue
+
+                        sp = apply_diff(s, diff)
+                        p = self.transition_table.get_p(s, a, sp) / Z
+                        r = self.get_reward(s, a, sp, evaluation=evaluation)
+                        t = (1 - self.transition_table.get_prob_terminal(s, a, sp))
+
+                        transitions_sa.append((sp, p, r, t))
+                transitions[(s, a)] = transitions_sa
+
+        if evaluation:
+            self.evaluation_values, self.evaluation_qs =\
+                self.value_iteration.run_vi(self.evaluation_values, self.states, actions_for_state, transitions, 0)
+        else:
+            self.values, self.qs =\
+                self.value_iteration.run_vi(self.values, self.states, actions_for_state, transitions, self.utopia_val)
 
     def get_all_actions_for_state(self, state):
         actions = []
@@ -255,41 +283,6 @@ class OORMaxLearner(interfaces.LearningAgent):
             pia = (preds, i, att)
             actions.extend(self.actions_for_pia[pia])
         return actions
-
-    def calculate_qs(self, s, values, evaluation=False):
-        qs = dict()
-
-        for a in self.get_all_actions_for_state(s):
-            # when evaluating dont use rmax for underexplored states, for invalid transitions assign 0-value.
-            if a in self.transition_table.a_count:
-                if self.transition_table.a_count[a] >= self.transition_table.num_conf or evaluation:
-                    val = 0
-
-                    if a in self.transition_table.valid_transitions:
-                        Z = np.sum(
-                            [self.transition_table.get_p(s, a, apply_diff(s, diff)) for diff in self.transition_table.valid_transitions[a] if does_diff_apply(s, diff)])
-                        for diff in self.transition_table.valid_transitions[a]:
-                            if not does_diff_apply(s, diff):
-                                continue
-
-                            sp = apply_diff(s, diff)
-                            p = self.transition_table.get_p(s, a, sp) / Z
-                            r = self.get_reward(s, a, sp, evaluation=evaluation)
-
-                            if sp in values:
-                                use_backup = (1 - self.transition_table.get_prob_terminal(s, a, sp))
-                                val += p * (r + self.gamma * values[sp] * use_backup)
-                            else:
-                                val += p * (r + self.gamma * self.utopia_val)
-                else:
-                    val = self.utopia_val
-            else:
-                if evaluation:
-                    val = 0
-                else:
-                    val = self.utopia_val
-            qs[a] = val
-        return qs
 
     def get_reward(self, s, a, sp, evaluation=False):
         # if evaluation:
@@ -318,7 +311,7 @@ class OORMaxLearner(interfaces.LearningAgent):
             if s not in self.states:
                 self.create_new_state(s)
                 self.populate_imagined_states()
-                self.values = self.run_vi(self.values.copy())
+                self.run_vi()
 
             a = self.get_l1_action(s)
 
@@ -363,6 +356,7 @@ class OORMaxLearner(interfaces.LearningAgent):
 
             # Check if finished exploring
             if type(a) is L1ExploreAction:
+                changed = False
                 preds = self.pred_func(s)
                 for i, val in s:
                     pia = (preds, i, val)
@@ -373,6 +367,9 @@ class OORMaxLearner(interfaces.LearningAgent):
                             explore_action.count >= self.transition_table.num_conf and \
                             len(self.get_all_actions_for_state(s)) > 1:
                         self.actions_for_pia[pia].remove(explore_action)
+                        changed = True
+                if changed:
+                    self.run_vi()
 
             total_episode_steps += episode_steps
             total_reward += R
@@ -386,14 +383,16 @@ class OORMaxLearner(interfaces.LearningAgent):
 
             # perform vi for both evaluation values and regular values.
             if self.value_update_counter % self.value_update_freq == 0:
-                self.values = self.run_vi(self.values.copy())
+                self.run_vi()
             self.value_update_counter += 1
 
         return total_episode_steps, total_reward
 
     def get_l1_action(self, state, evaluation=False):
-        values = self.evaluation_values if evaluation else self.values
-        qs = self.calculate_qs(state, values, evaluation=evaluation)
+        if evaluation:
+            qs = self.evaluation_qs[state]
+        else:
+            qs = self.qs[state]
         keys, values = zip(*qs.items())
         # if evaluation:
         #     action = np.random.choice(np.array(keys)[np.array(values) == np.max(values)])
@@ -408,11 +407,16 @@ class OORMaxLearner(interfaces.LearningAgent):
     def get_action(self, state, evaluation=False):
         l1_state = self.abs_func(state)
 
-        # check if we've ever seen this state
-        if l1_state not in self.states:
-            return 0
+        if l1_state == self.last_evaluation_state:
+            l1_action = self.last_evaluation_action
+        else:
+            # check if we've ever seen this state
+            if l1_state not in self.states:
+                return 0
 
-        l1_action = self.get_l1_action(l1_state, evaluation=evaluation)
+            l1_action = self.get_l1_action(l1_state, evaluation=evaluation)
+            self.last_evaluation_state = l1_state
+            self.last_evaluation_action = l1_action
 
         if type(l1_action) is L1ExploreAction:
             return np.random.choice(self.env.get_actions_for_state(state))

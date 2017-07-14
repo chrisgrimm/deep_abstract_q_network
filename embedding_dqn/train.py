@@ -36,7 +36,7 @@ vis_update_interval = 10000
 
 
 def evaluate_agent_reward(steps, env, agent, epsilon):
-    agent.evaluation_values = agent.run_vi(agent.evaluation_values.copy(), evaluation=True)
+    agent.run_vi(evaluation=True)
     num_explored_states = len(agent.states)
 
     env.terminate_on_end_life = False
@@ -49,14 +49,10 @@ def evaluate_agent_reward(steps, env, agent, epsilon):
             total_reward = 0
             env.reset_environment()
         state = env.get_current_state()
-        abs_state = env.abstraction.abstraction_function(state)
-        #abs_state = env.sector_abstraction(state)
-        #env.
         if np.random.uniform(0, 1) < epsilon:
             action = np.random.choice(env.get_actions_for_state(state))
         else:
-
-            action = agent.get_action(state, abs_state, evaluation=True)
+            action = agent.get_action(state, evaluation=True)
 
         state, action, reward, next_state, is_terminal = env.perform_action(action)
         total_reward += reward
@@ -111,17 +107,17 @@ def train_rmax_daqn(env, num_actions):
     training_epsilon = 0.01
     test_epsilon = 0.001
 
-    frame_history = 1
-    abs_size = 33
-    abs_func = env.sector_abstraction
-
     # frame_history = 1
-    # use_sectors = True
-    # abs = mr_abs.MRAbstraction(use_sectors=use_sectors)
-    # env.set_abstraction(abs)
-    # abs.set_env(env)
-    # abs_func = abs.abstraction_function
-    # abs_size = 24 + (9 if use_sectors else 0) + 10
+    # abs_size = 33
+    # abs_func = env.sector_abstraction
+
+    frame_history = 1
+    use_sectors = True
+    abs = mr_abs.MRAbstraction(use_sectors=use_sectors)
+    env.set_abstraction(abs)
+    abs.set_env(env)
+    abs_func = abs.abstraction_function
+    abs_size = 24 + (9 if use_sectors else 0) + 10
 
     agent = rmax_learner.RMaxLearner(abs_size, env, abs_func, frame_history=frame_history)
 
@@ -204,10 +200,10 @@ def setup_wind_tunnel_env():
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
-def setup_tabular_env():
-    env = tabular_coin_game.TabularCoinGame()
-    num_actions = len(env.get_actions_for_state(None))
-    return env, num_actions
+# def setup_tabular_env():
+#     env = tabular_coin_game.TabularCoinGame()
+#     num_actions = len(env.get_actions_for_state(None))
+#     return env, num_actions
 
 def setup_toy_mr_env():
     env = toy_mr.ToyMR('../mr_maps/full_mr_map.txt', abstraction_file='../mr_maps/full_mr_map_abs.txt', use_gui=True)
@@ -220,7 +216,7 @@ def setup_mr_env(frame_history_length=1):
     return env, num_actions
 
 
-game = 'toy_mr_100000'
+game = 'mr'
 #train_rmax_daqn(*setup_mr_env())
 # train_rmax_daqn(*setup_mr_env())
 # train_double_dqn(*setup_toy_mr_env())

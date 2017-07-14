@@ -120,6 +120,20 @@ def fully_connected_weights(inp, dqn_numbers, max_dqn_number, neurons, rectifier
     fc = rectifier(tf.reshape(tf.matmul(tf.reshape(inp, [batch_size, 1, inp.get_shape()[1].value]), w), [batch_size, -1]) + b)
     return fc
 
+def fully_connected_weights_2(inp, dqn_numbers, max_dqn_number, neurons, rectifier, bias=0.0):
+    onehot_action = tf.one_hot(dqn_numbers, max_dqn_number)
+    batch_size = tf.shape(inp)[0]
+    with tf.variable_scope('full_conv_vars'):
+        W = tf.get_variable('W', [max_dqn_number, inp.get_shape()[1].value, neurons], initializer=tf.contrib.layers.xavier_initializer())
+        B = tf.get_variable('B', [max_dqn_number, neurons], initializer=tf.constant_initializer(bias))
+
+    w = tf.reduce_sum(tf.reshape(onehot_action, [-1, max_dqn_number, 1, 1]) * tf.expand_dims(W, axis=0), axis=1)
+    b = tf.reduce_sum(tf.reshape(onehot_action, [-1, max_dqn_number, 1]) * tf.expand_dims(B, axis=0), axis=1)
+    #w = tf.reshape(tf.gather_nd(W, tf.reshape(dqn_numbers, [-1, 1])), [batch_size, inp.get_shape()[1].value, neurons])
+    #b = tf.reshape(tf.gather_nd(B, tf.reshape(dqn_numbers, [-1, 1])), [batch_size, neurons])
+    fc = rectifier(tf.reshape(tf.matmul(tf.reshape(inp, [batch_size, 1, inp.get_shape()[1].value]), w), [batch_size, -1]) + b)
+    return fc
+
 
 def fully_connected_shared_bias(inp, neurons, rectifier):
     with tf.variable_scope('full_conv_vars'):

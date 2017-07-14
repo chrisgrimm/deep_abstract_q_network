@@ -17,6 +17,18 @@ global_object_locs = [  # stored as (byte, bit)
     (8, 3),  # Door L Room 17
 ]
 
+# key_locations = [  # (room, sector) of all keys. ORDERED AS ABOVE
+#     (1, (0, 1)),
+#     (7, (0, 1)),
+#     (8, ())
+# ]
+#
+# door_locations = [  # (room, sector) of all doors. ORDERED AS ABOVE
+#     (1, (2, 2)),
+#     (1, (0, 2)),
+#
+# ]
+
 
 def get_bit(a, i):
     return a & (2**i) != 0
@@ -30,6 +42,7 @@ class MRAbstraction(object):
         self.current_room = 1
         self.use_sectors = use_sectors
         self.agent_sector = (1, 2)
+        self.num_keys = 0
         self.old_should_check = True
         self.update_room_value = None
         self.updated_room = False
@@ -41,6 +54,12 @@ class MRAbstraction(object):
 
     def set_env(self, env):
         self.env = env
+
+    def update_num_keys(self, ram):
+        num_keys = 0
+        for i in range(1, 5):
+            num_keys += int(get_bit(ram[65], i))
+        self.num_keys = num_keys
 
     def update_global_state(self, ram):
         for i, (byte, bit) in enumerate(global_object_locs):
@@ -109,9 +128,10 @@ class MRAbstraction(object):
         self.update_global_state(ram)
         self.update_current_room(ram, hard=hard)
         self.update_agent_sector(ram, hard=hard)
+        self.update_num_keys(ram)
 
     def get_abstract_state(self):
-        return MRAbstractState(self.current_room, self.agent_sector if self.use_sectors else None, self.global_state)
+        return MRAbstractState(self.current_room, self.agent_sector if self.use_sectors else None, self.num_keys, self.global_state)
 
     def abstraction_function(self, x):
         new_RAM = self.env.getRAM()
@@ -120,12 +140,56 @@ class MRAbstraction(object):
             self.old_RAM = new_RAM
         return self.get_abstract_state()
 
+    def oo_abstraction_function(self, x):
+        s = self.abstraction_function(x)
+
+        # create attributes
+        attrs = dict()
+        loc_att = (s.room, s.agent_sector)
+        attrs['.loc'] = loc_att
+        attrs['.num_keys'] = s.num_keys
+
+        for i, val in enumerate(s.global_state[0:5]):
+            attrs['key_%s' % i] = val
+
+        for i, val in enumerate(s.global_state[5:12]):
+            attrs['door_%s' % i] = val
+
+        return tuple(sorted(attrs.items()))
+
+    def predicate_func(self, l1_state):
+
+        s = dict(l1_state)
+        (room, sector) = s['.loc']
+        num_keys = s['.num_keys']
+
+        # create predicates
+        preds = dict()
+        for i, (key_room, key_pos) in enumerate(self.keys):
+            pred = False
+            if key_room == room:
+                key_sector = self.sector_for_loc(key_room, key_pos)
+                pred = sector == key_sector and s['key_%s' % i]
+            preds['key_%s_in' % i] = pred
+        for i, (door_room, door_pos) in enumerate(self.doors):
+            pred = False
+            pred_key_door = False
+            if door_room == room:
+                door_sector = self.sector_for_loc(door_room, door_pos)
+                pred = sector == door_sector and s['door_%s' % i]
+                pred_key_door = pred and num_keys >= 1
+            preds['door_%s_in' % i] = pred
+            preds['door_key_%s_in' % i] = pred_key_door
+
+        return tuple(sorted(preds.items()))
+
 
 class MRAbstractState(AbstractState):
 
-    def __init__(self, room, agent_sector, global_state):
+    def __init__(self, room, agent_sector, num_keys, global_state):
         self.room = room
         self.agent_sector = agent_sector
+        self.num_keys = num_keys
         self.global_state = tuple(global_state)
 
     def get_key_lazy(self):

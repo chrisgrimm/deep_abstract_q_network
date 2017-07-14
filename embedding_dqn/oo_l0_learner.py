@@ -157,7 +157,7 @@ def construct_q_network_weights_only_final(input, dqn_numbers, dqn_max_number, f
     with tf.variable_scope('fc1'):
         fc1 = th.fully_connected(c3, 512, tf.nn.relu)
     with tf.variable_scope('fc2'):
-        q_values = th.fully_connected_weights(fc1, dqn_numbers, dqn_max_number, num_actions, lambda x: x)
+        q_values = th.fully_connected_weights_2(fc1, dqn_numbers, dqn_max_number, num_actions, lambda x: x)
     return q_values
 
 

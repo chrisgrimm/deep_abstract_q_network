@@ -176,7 +176,7 @@ class MultiHeadedDQLearner():
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
-                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=0.5, max_dqn_number=1, rmax_learner=None):
+                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=0.5, max_dqn_number=300, rmax_learner=None):
         self.rmax_learner = rmax_learner
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
@@ -204,9 +204,8 @@ class MultiHeadedDQLearner():
         self.gamma = gamma
         self.max_dqn_number = max_dqn_number
         #q_constructor = lambda inp: construct_q_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
-
-        q_constructor = lambda inp: construct_small_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
-        # q_constructor = lambda inp: construct_dqn_with_embedding_2_layer(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
+        # q_constructor = lambda inp: construct_small_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
+        q_constructor = lambda inp: construct_dqn_with_embedding_2_layer(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
         # q_constructor = lambda inp: construct_dqn_with_subgoal_embedding(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
         # q_constructor = lambda inp: construct_meta_dqn_network(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
         with tf.variable_scope('online'):
@@ -290,27 +289,27 @@ class MultiHeadedDQLearner():
         Aonehot = np.zeros((self.batch_size, self.num_actions), dtype=np.float32)
         Aonehot[range(len(A)), A] = 1
 
-        # get random sample of neighbors for each Sigma1
-        SigmaGoal = []
-        R = []
-        l0_terminated = []
-        for (terminal, sigma1, sigma2) in zip(T, Sigma1, Sigma2):
-            sigma_goal = random.sample(self.abs_neighbors[tuple(sigma1)], 1)[0]
-            SigmaGoal.append(sigma_goal)
-
-            l1_transitioned = tuple(sigma1) != tuple(sigma2)
-            l0_terminated.append(l1_transitioned or terminal)
-
-            if terminal:
-                r = 0
-            elif l1_transitioned:
-                if tuple(sigma2) == tuple(sigma_goal):
-                    r = 1
-                else:
-                    r = 0
-            else:
-                r = 0
-            R.append(r)
+        # # get random sample of neighbors for each Sigma1
+        # SigmaGoal = []
+        # R = []
+        # l0_terminated = []
+        # for (terminal, sigma1, sigma2) in zip(T, Sigma1, Sigma2):
+        #     sigma_goal = random.sample(self.abs_neighbors[tuple(sigma1)], 1)[0]
+        #     SigmaGoal.append(sigma_goal)
+        #
+        #     l1_transitioned = tuple(sigma1) != tuple(sigma2)
+        #     l0_terminated.append(l1_transitioned or terminal)
+        #
+        #     if terminal:
+        #         r = 0
+        #     elif l1_transitioned:
+        #         if tuple(sigma2) == tuple(sigma_goal):
+        #             r = 1
+        #         else:
+        #             r = 0
+        #     else:
+        #         r = 0
+        #     R.append(r)
 
         [_, loss, q_online, maxQ, q_target, r, y, delta_dqn, g] = self.sess.run(
             [self.train_op, self.loss, self.q_online, self.maxQ, self.q_target, self.r, self.y, self.delta_dqn,
@@ -358,8 +357,8 @@ class MultiHeadedDQLearner():
             #                                 goal_l1_state)
 
             if np.random.uniform(0, 1) < epsilon:
-                # action = np.random.choice(environment.get_actions_for_state(state))
-                action = self.get_safe_explore_action(state, environment)
+                action = np.random.choice(environment.get_actions_for_state(state))
+                # action = self.get_safe_explore_action(state, environment)
             else:
                 action = self.get_action(state, initial_l1_state_vec, goal_l1_state_vec, dqn_number)
 
