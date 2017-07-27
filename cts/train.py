@@ -14,12 +14,14 @@ import tabular_dqn
 import tabular_coin_game
 # import daqn_clustering
 # import dq_learner_priors
+from cts import atari_encoder
 from cts import dq_learner_pc
+from cts import toy_mr_encoder
 
 num_steps = 50000000
 test_interval = 250000
 test_frames = 125000
-game_dir = './roms'
+game_dir = '../roms'
 
 vis_update_interval = 10000
 
@@ -104,15 +106,23 @@ def train_double_dqn(env, num_actions):
     training_epsilon = 0.01
     test_epsilon = 0.001
 
-    frame_history = 1
+    # frame_history = 1
+    # enc_func = toy_mr_encoder.encode_toy_mr_state
+    # cts_size = (11, 12, 3)
+
+    frame_history = 4
+    cts_size = (42, 42, 3)
+    enc_func = atari_encoder.encode_state
+
     dqn = atari_dqn.AtariDQN(frame_history, num_actions)
-    agent = dq_learner_pc.DQLearner(dqn, num_actions, frame_history=frame_history, epsilon_end=training_epsilon)
+    agent = dq_learner_pc.DQLearner(dqn, num_actions, frame_history=frame_history, epsilon_end=training_epsilon,
+                                    state_encoder=enc_func, cts_size=cts_size)
 
     train(agent, env, test_epsilon, results_dir)
 
 def setup_atari_env():
     # create Atari environment
-    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin')
+    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', use_gui=True)
     num_actions = len(env.ale.getMinimalActionSet())
     return env, num_actions
 
@@ -122,6 +132,7 @@ def setup_toy_mr_env():
     return env, num_actions
 
 
-game = 'toy_mr'
+game = 'montezuma_revenge'
 # train_dqn(*setup_coin_env())
-train_double_dqn(*setup_toy_mr_env())
+# train_double_dqn(*setup_toy_mr_env())
+train_double_dqn(*setup_atari_env())

@@ -199,10 +199,11 @@ def construct_meta_dqn_network(input, abs_state1, abs_state2, frame_history, num
 class MultiHeadedDQLearner():
     def __init__(self, abs_size, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00025,
                  replay_start_size=500,
-                 epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
+                 epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=100000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
-                 use_mmc=False, max_mmc_path_length=1000, mmc_beta=0.0, max_dqn_number=300, rmax_learner=None):
+                 use_mmc=False, max_mmc_path_length=1000, mmc_beta=0.0, max_dqn_number=300, rmax_learner=None,
+                 encoding_func=None, bonus_beta=0.05):
         self.rmax_learner = rmax_learner
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
@@ -224,8 +225,6 @@ class MultiHeadedDQLearner():
         self.inp_dqn_numbers = tf.placeholder(tf.int32, [None])
         # self.inp_q_choices = tf.placeholder(tf.int32, [None])
 
-        self.inp_abs_state_init = tf.placeholder(tf.float32, [None, abs_size])
-        self.inp_abs_state_goal = tf.placeholder(tf.float32, [None, abs_size])
         self.abs_neighbors = dict()
         self.gamma = gamma
         self.max_dqn_number = max_dqn_number
@@ -258,7 +257,7 @@ class MultiHeadedDQLearner():
         else:
             self.maxQ = tf.reduce_max(self.q_target, axis=1)
 
-        self.r = tf.sign(self.inp_reward)
+        self.r = self.inp_reward
         use_backup = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32)
         self.y = self.r + use_backup * gamma * self.maxQ
 
@@ -276,7 +275,10 @@ class MultiHeadedDQLearner():
             self.loss = tf.reduce_sum(self.error_dqn)
         self.g = tf.gradients(self.loss, self.q_online)
         optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, centered=True, epsilon=0.01)
-        self.train_op = optimizer.minimize(self.loss, var_list=th.get_vars('online'))
+        self.pre_gvs = optimizer.compute_gradients(self.loss, var_list=th.get_vars('online'))
+        self.pre_gvs = [(tf.where(tf.is_nan(grad), tf.zeros_like(grad), grad), var) for grad, var in self.pre_gvs]
+        self.post_gvs = [(tf.clip_by_value(grad, -10., 10.), var) for grad, var in self.pre_gvs]
+        self.train_op = optimizer.apply_gradients(self.post_gvs)
         self.copy_op = th.make_copy_op('online', 'target')
         self.saver = tf.train.Saver(var_list=th.get_vars('online'))
 
@@ -288,6 +290,7 @@ class MultiHeadedDQLearner():
         self.replay_start_size = replay_start_size
         self.epsilon = [epsilon_start] * num_abstract_states * num_abstract_states
         self.epsilon = dict()
+        self.global_epsilon = epsilon_start
         self.epsilon_min = epsilon_end
         self.epsilon_steps = epsilon_steps
         self.epsilon_delta = (epsilon_start - self.epsilon_min) / self.epsilon_steps
@@ -298,12 +301,17 @@ class MultiHeadedDQLearner():
         self.num_actions = num_actions
         self.batch_size = batch_size
 
+        self.check_op = tf.add_check_numerics_ops()
         self.sess.run(tf.initialize_all_variables())
 
         if restore_network_file is not None:
             self.saver.restore(self.sess, restore_network_file)
             print 'Restored network from file'
         self.sess.run(self.copy_op)
+
+        self.encoding_func = encoding_func
+        self.bonus_beta = bonus_beta
+        self.reward_mult = 1
 
         ####################
         ## Keeping track of progress of actions
@@ -320,16 +328,16 @@ class MultiHeadedDQLearner():
         Aonehot = np.zeros((self.batch_size, self.num_actions), dtype=np.float32)
         Aonehot[range(len(A)), A] = 1
 
-        [_, loss, q_online, maxQ, q_target, r, y, delta_dqn, g] = self.sess.run(
+        [_, loss, q_online, maxQ, q_target, r, y, delta_dqn, g, pre_gvs, post_gvs] = self.sess.run(
             [self.train_op, self.loss, self.q_online, self.maxQ, self.q_target, self.r, self.y, self.delta_dqn,
-             self.g],
+             self.g, self.pre_gvs, self.post_gvs],
             feed_dict={self.inp_frames: S1, self.inp_actions: Aonehot,
                        self.inp_sp_frames: S2, self.inp_reward: R, self.inp_mmc_reward: MMC_R,
                        self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2,
                        self.inp_dqn_numbers: DQNNumbers})
         return loss
 
-    def run_learning_episode(self, environment, initial_l1_state, goal_l1_state, dqn_number, abs_func, epsilon, max_episode_steps=100000):
+    def run_learning_episode(self, environment, initial_l1_state, goal_l1_state, dqn_number, abs_func, epsilon, max_episode_steps=100000, cts=None):
         episode_steps = 0
         total_reward = 0
         episode_finished = False
@@ -351,12 +359,14 @@ class MultiHeadedDQLearner():
                 action = self.get_action(state, dqn_number)
 
             if self.replay_buffer.size() > self.replay_start_size:
+                self.global_epsilon = max(self.epsilon_min, self.global_epsilon - self.epsilon_delta)
                 self.epsilon[dqn_tuple] = max(self.epsilon_min, self.epsilon[dqn_tuple] - self.epsilon_delta)
+
 
             state, action, env_reward, next_state, is_terminal = environment.perform_action(action)
             total_reward += env_reward
 
-            new_l1_state = abs_func(state)
+            new_l1_state = abs_func(next_state)
             # if initial_l1_state != new_l1_state:
             #     self.abs_neighbors[key_init].add(tuple(new_l1_state.get_vector()))
 
@@ -366,15 +376,24 @@ class MultiHeadedDQLearner():
             else:
                 reward = 0
 
-            if goal_l1_state != None:
+            if cts is None:
+                R_plus = 0
+            else:
+                enc_s = self.encoding_func(environment)
+                n_hat = cts.psuedo_count_for_image(enc_s)
+                R_plus = (1 - (episode_finished or is_terminal)) * (self.bonus_beta * np.power(n_hat + 0.01, -0.5))
+
+            R_plus = (self.reward_mult * np.sign(reward)) + R_plus
+
+            if dqn_number != -1:
                 if self.use_mmc:
-                    sars = (state[-1], dqn_number, action, reward, next_state[-1],
+                    sars = (state[-1], dqn_number, action, R_plus, next_state[-1],
                             is_terminal or episode_finished)
                     self.mmc_tracker.append(*sars)
                     if is_terminal or episode_finished:
                         self.mmc_tracker.flush()
                 else:
-                    sars = (state[-1], dqn_number, action, reward, 0, next_state[-1],
+                    sars = (state[-1], dqn_number, action, R_plus, 0, next_state[-1],
                             is_terminal or episode_finished)
                     self.replay_buffer.append(*sars)
 
@@ -389,27 +408,6 @@ class MultiHeadedDQLearner():
                 break
 
         return episode_steps, total_reward, new_l1_state
-
-    def record_option_progress(self, option_key, initial_l1_state_vec, goal_l1_state_vec, initial_l1_state,
-                               goal_l1_state):
-        state_input = np.transpose(self.state_samples_for_option[option_key], [0, 2, 3, 1])
-
-        [q_values] = self.sess.run([self.q_online],
-                                   feed_dict={self.inp_frames: state_input,
-                                              self.inp_mask: np.ones((len(state_input), self.frame_history),
-                                                                     dtype=np.float32),
-                                              self.inp_abs_state_init: np.repeat([initial_l1_state_vec],
-                                                                                 len(state_input), axis=0),
-                                              self.inp_abs_state_goal: np.repeat([initial_l1_state_vec],
-                                                                                 len(state_input), axis=0)})
-
-        a = rmax_learner.L1Action(initial_l1_state, goal_l1_state, initial_l1_state_vec, goal_l1_state_vec)
-        q_vals_filename = 'action_progress/%s_qs.txt' % str(a)
-        # loss_filename = 'action_progress/%s_loss.txt' % str(a)
-        # with open(q_vals_filename, 'a') as f:
-        #    f.write(str(np.average(q_values)) + '\n')
-        # with open(loss_filename, 'a') as f:
-        #     f.write(loss)
 
     def get_action(self, state, dqn_number):
         state_input = np.transpose(state, [1, 2, 0])

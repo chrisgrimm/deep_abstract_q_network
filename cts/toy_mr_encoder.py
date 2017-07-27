@@ -1,10 +1,12 @@
 import numpy as np
 import toy_mr
 
+SYMBOLS = [toy_mr.WALL_CODE, toy_mr.KEY_CODE, toy_mr.DOOR_CODE, toy_mr.TRAP_CODE, toy_mr.AGENT_CODE]
+ENCODING_LENGTH = int(np.log2(np.max(SYMBOLS))) + 1
 
 def encode_toy_mr_state(env):
     (w, h) = env.room.map.shape
-    symbols = np.zeros((w, h + 1), dtype=np.uint32)
+    symbols = np.zeros((w, h + 1), dtype=np.uint8)
 
     # draw walls
     for coord in env.room.walls:

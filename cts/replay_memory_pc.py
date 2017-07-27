@@ -1,4 +1,86 @@
 import numpy as np
+from collections import deque
+
+class MMCPathTracker(object):
+
+    def __init__(self, replay_memory, max_path_length, gamma):
+        self.replay_memory = replay_memory
+        self.max_path_length = max_path_length
+        self.gamma = gamma
+        self.path = deque()
+        self.C = 0
+        self.path_length_counter = 0
+
+    def push(self, S1, A, R, S2, T):
+        self.C += self.gamma ** self.path_length_counter * R
+        self.path.append((S1, A, R, S2, T))
+
+    def pop(self):
+        (S1, A, R, S2, T) = self.path.popleft()
+        self.replay_memory.append(S1, A, R, self.C, S2, T)
+        self.C = (self.C - R)/self.gamma
+
+    def append(self, S1, A, R, S2, T):
+        if len(self.path) == self.max_path_length:
+            self.pop()
+        self.push(S1, A, R, S2, T)
+        self.path_length_counter = min(self.path_length_counter + 1, self.max_path_length)
+
+    def flush(self):
+        for i in xrange(len(self.path)):
+            self.pop()
+        self.C = 0
+        self.path_length_counter = 0
+
+class MMCPathTracker2(object):
+
+    def __init__(self, replay_memory, max_path_length, gamma):
+        self.replay_memory = replay_memory
+        self.max_path_length = max_path_length
+        self.gamma = gamma
+        self.replay_path = deque()
+        self.path = np.zeros(shape=[max_path_length], dtype=np.float32)
+        self.mmc_reward_array = np.ones(shape=[max_path_length], dtype=np.float32)
+        for i in range(max_path_length):
+            self.mmc_reward_array[i] = self.gamma ** i
+        self.path_start_index = 0
+        self.path_end_index = 0
+
+    def _get_path_slice(self):
+        if self.path_start_index < self.path_end_index:
+            path_slice = self.path[self.path_start_index:self.path_end_index]
+        else:
+            p1 = self.path[self.path_start_index:]
+            p2 = self.path[:self.path_end_index]
+            path_slice = np.concatenate([p1, p2])
+        path_slice = np.pad(path_slice, (0, len(self.mmc_reward_array) - len(path_slice)), 'constant')
+        return path_slice
+
+    def _get_mmc_reward_for_slice(self, slice):
+        return np.sum(slice * self.mmc_reward_array)
+
+    def _push(self, S1, A, R, S2, T):
+        self.path[self.path_end_index] = R
+        self.path_end_index = (self.path_end_index + 1) % self.max_path_length
+        self.replay_path.append((S1, A, R, S2, T))
+
+    def _pop(self):
+        (S1, A, R, S2, T) = self.replay_path.popleft()
+        self.path_start_index = (self.path_start_index + 1) % self.max_path_length
+        MMCR = self._get_mmc_reward_for_slice(self._get_path_slice())
+        self.replay_memory.append(S1, A, R, MMCR, S2, T)
+
+    def append(self, S1, A, R, S2, T):
+        if len(self.replay_path) == self.max_path_length:
+            self._pop()
+        self._push(S1, A, R, S2, T)
+
+    def flush(self):
+        for i in xrange(len(self.replay_path)):
+            self._pop()
+        self.path.fill(0)
+        self.path_start_index = 0
+        self.path_end_index = 0
 
 class ReplayMemory(object):
 
@@ -14,16 +96,16 @@ class ReplayMemory(object):
         self.screens = np.zeros([capacity] + list(self.input_shape), dtype=input_dtype)
         self.action = np.zeros(capacity, dtype=np.uint8)
         self.reward = np.zeros(capacity, dtype=np.float32)
-        self.encoded_screens = np.zeros([capacity, 11, 11], dtype=np.uint32)
+        self.mmc_reward = np.zeros(capacity, dtype=np.float32)
         self.terminated = np.zeros(capacity, dtype=np.bool)
         self.transposed_shape = range(1, len(self.input_shape)+1) + [0]
 
-    def append(self, S1, A, R, S2, enc_S2, T):
+    def append(self, S1, A, R, MMCR, S2, T):
         self.screens[self.t] = S1
         self.action[self.t] = A
         self.reward[self.t] = R
+        self.mmc_reward[self.t] = MMCR
         self.terminated[self.t] = T
-        self.encoded_screens[self.t] = enc_S2
         self.t = (self.t + 1)
         if self.t >= self.capacity:
             self.t = 0
@@ -61,10 +143,10 @@ class ReplayMemory(object):
 
         a = self.action[index]
         r = self.reward[index]
+        mmc_r = self.mmc_reward[index]
         t = self.terminated[index]
-        enc_s2 = self.encoded_screens[index]
 
-        return S0, a, r, S1, t, enc_s2, mask, mask2
+        return S0, a, r, mmc_r, S1, t, mask, mask2
 
     def sample(self, num_samples):
         if not self.filled:
@@ -77,24 +159,24 @@ class ReplayMemory(object):
         S0 = []
         A = []
         R = []
+        MMC_R = []
         S1 = []
-        enc_S2 = []
         T = []
         M1 = []
         M2 = []
 
         for sample_i in idx:
-            s0, a, r, s1, t, enc_s2, mask, mask2 = self.get_sample(sample_i)
+            s0, a, r, mmc_r, s1, t, mask, mask2 = self.get_sample(sample_i)
             S0.append(s0)
             A.append(a)
             R.append(r)
+            MMC_R.append(mmc_r)
             S1.append(s1)
             T.append(t)
-            enc_S2.append(enc_s2)
             M1.append(mask)
             M2.append(mask2)
 
-        return S0, A, R, S1, T, enc_S2, M1, M2
+        return S0, A, R, MMC_R, S1, T, M1, M2
 
     def size(self):
         if self.filled:

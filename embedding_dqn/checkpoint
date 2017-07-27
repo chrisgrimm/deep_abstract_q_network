@@ -1,3 +1,2 @@
-model_checkpoint_path: "toy_mr_net"
-all_model_checkpoint_paths: "results/rmax_daqn/mr_100000_fixed_terminal/mr_100000_best_net.ckpt"
-all_model_checkpoint_paths: "toy_mr_net"
+model_checkpoint_path: "oo_net.ckpt"
+all_model_checkpoint_paths: "oo_net.ckpt"

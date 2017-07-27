@@ -15,6 +15,9 @@ bitKeysMap = [
 ]
 
 
+def get_bit(a, i):
+    return a & (2**i) != 0
+
 if __name__ == "__main__":
     abstraction = mr_abs.MRAbstraction()
 
@@ -33,7 +36,7 @@ if __name__ == "__main__":
     down = False
     fire = False
 
-    fps = 60
+    fps = 30
 
     last_update = datetime.datetime.now()
     update_time = datetime.timedelta(milliseconds=1000 / fps)
@@ -89,12 +92,6 @@ if __name__ == "__main__":
 
             action = bitKeysMap[bitfield]
             env.perform_atari_action(action)
-
-            new_l1_state = abstraction.abstraction_function(None)
-
-            if new_l1_state != l1_state:
-                l1_state = new_l1_state
-                print l1_state
 
             new_l1_state = abstraction.abstraction_function(None)
 

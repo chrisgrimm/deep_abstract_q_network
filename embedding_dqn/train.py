@@ -3,6 +3,7 @@ import datetime
 import numpy as np
 import tqdm
 import os
+import tensorflow as tf
 
 import atari
 import atari_dqn
@@ -13,6 +14,8 @@ import wind_tunnel
 import daqn
 #import tabular_dqn
 #import tabular_coin_game
+from cts import atari_encoder
+from cts import toy_mr_encoder
 from embedding_dqn import mr_environment
 from embedding_dqn import oo_rmax_learner
 from embedding_dqn.abstraction_tools import mr_abstraction_ram as mr_abs
@@ -158,7 +161,7 @@ def train_oo_rmax_daqn(env, num_actions):
     frame_history = 1
     abs_size = 33
     abs_func = env.oo_sector_abstraction
-    pred_func = env.predicate_func
+    pred_func = env.sector_predicate_func
 
     # frame_history = 1
     # use_sectors = True
@@ -168,7 +171,36 @@ def train_oo_rmax_daqn(env, num_actions):
     # abs_func = abs.abstraction_function
     # abs_size = 24 + (9 if use_sectors else 0) + 10
 
-    agent = oo_rmax_learner.OORMaxLearner(abs_size, env, abs_func, pred_func, frame_history=frame_history)
+    agent = oo_rmax_learner.OORMaxLearner(abs_size, env, abs_func, pred_func, frame_history=frame_history, restore_file='')
+
+    train(agent, env, test_epsilon, results_dir)
+
+def train_hadooqn(env, num_actions):
+    results_dir = './results/rmax_daqn/%s_fixed_terminal' % game
+
+    training_epsilon = 0.01
+    test_epsilon = 0.001
+
+    frame_history = 1
+    abs_size = 33
+    abs_func = env.oo_abstraction
+    pred_func = env.predicate_func
+    enc_func = toy_mr_encoder.encode_toy_mr_state
+    cts_size = (11, 12, 3)
+
+    # frame_history = 1
+    # use_sectors = True
+    # abs = mr_abs.MRAbstraction(use_sectors=use_sectors)
+    # env.set_abstraction(abs)
+    # abs.set_env(env)
+    # abs_func = abs.abstraction_function
+    # abs_size = 24 + (9 if use_sectors else 0) + 10
+    # enc_func = atari_encoder.encode_state
+    # cts_size = (42, 42, 3)
+
+    with tf.device('/gpu:1'):
+        agent = oo_rmax_learner.OORMaxLearner(abs_size, env, abs_func, pred_func, frame_history=frame_history,
+                                              state_encoder=enc_func, cts_size=cts_size, bonus_beta=0.05)
 
     train(agent, env, test_epsilon, results_dir)
 
@@ -223,4 +255,5 @@ game = 'mr'
 
 # train_rmax_daqn(*setup_mr_env())
 # train_rmax_daqn(*setup_toy_mr_env())
-train_oo_rmax_daqn(*setup_toy_mr_env())
+# train_oo_rmax_daqn(*setup_toy_mr_env())
+train_hadooqn(*setup_toy_mr_env())

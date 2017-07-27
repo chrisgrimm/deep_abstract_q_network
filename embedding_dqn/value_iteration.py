@@ -26,7 +26,7 @@ class ValueIteration():
                 q_values[s] = qs
                 new_values[s] = val
 
-                if s in values and np.abs(val - values[s]) > self.VI_delta:
+                if s in values and np.abs(val - values[s])/val > self.VI_delta:
                     stop = False
             values = new_values.copy()
             if stop:
@@ -45,7 +45,7 @@ class ValueIteration():
             else:
                 for sp, p, r, t in transitions_sa:
                     if sp in values:
-                        val += p * (r + self.gamma * values[sp] * t)
+                        val += p * (r + self.gamma * values[sp] * (1 - t))
                     else:
                         val += p * (r + self.gamma * utopia_val)
             qs[a] = val

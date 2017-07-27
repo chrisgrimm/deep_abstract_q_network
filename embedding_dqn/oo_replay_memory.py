@@ -1,36 +1,56 @@
 import numpy as np
 from collections import deque
 
+
 class MMCPathTracker(object):
 
     def __init__(self, replay_memory, max_path_length, gamma):
         self.replay_memory = replay_memory
         self.max_path_length = max_path_length
         self.gamma = gamma
-        self.path = deque()
-        self.C = 0
-        self.path_length_counter = 0
+        self.replay_path = deque()
+        self.path = np.zeros(shape=[max_path_length], dtype=np.float32)
+        self.mmc_reward_array = np.ones(shape=[max_path_length], dtype=np.float32)
+        for i in range(max_path_length):
+            self.mmc_reward_array[i] = self.gamma ** i
+        self.path_start_index = 0
+        self.path_end_index = 0
 
-    def push(self, S1, DQNNumber, A, R, S2, T):
-        self.C += self.gamma ** self.path_length_counter * R
-        self.path.append((S1, DQNNumber, A, R, S2, T))
+    def _get_path_slice(self):
+        if self.path_start_index < self.path_end_index:
+            path_slice = self.path[self.path_start_index:self.path_end_index]
+        else:
+            p1 = self.path[self.path_start_index:]
+            p2 = self.path[:self.path_end_index]
+            path_slice = np.concatenate([p1, p2])
+        path_slice = np.pad(path_slice, (0, len(self.mmc_reward_array) - len(path_slice)), 'constant')
+        return path_slice
 
-    def pop(self):
-        (S1, DQNNumber, A, R, S2, T) = self.path.popleft()
-        self.replay_memory.append(S1, DQNNumber, A, R, self.C, S2, T)
-        self.C = (self.C - R)/self.gamma
+    def _get_mmc_reward_for_slice(self, slice):
+        return np.sum(slice * self.mmc_reward_array)
+
+    def _push(self, S1, DQNNumber, A, R, S2, T):
+        self.path[self.path_end_index] = R
+        self.path_end_index = (self.path_end_index + 1) % self.max_path_length
+        self.replay_path.append((S1, DQNNumber, A, R, S2, T))
+
+    def _pop(self):
+        (S1, DQNNumber, A, R, S2, T) = self.replay_path.popleft()
+        self.path_start_index = (self.path_start_index + 1) % self.max_path_length
+        MMCR = self._get_mmc_reward_for_slice(self._get_path_slice())
+        self.replay_memory.append(S1, DQNNumber, A, R, MMCR, S2, T)
 
     def append(self, S1, DQNNumber, A, R, S2, T):
-        if len(self.path) == self.max_path_length:
-            self.pop()
-        self.push(S1, DQNNumber, A, R, S2, T)
-        self.path_length_counter = min(self.path_length_counter + 1, self.max_path_length)
+        if len(self.replay_path) == self.max_path_length:
+            self._pop()
+        self._push(S1, DQNNumber, A, R, S2, T)
 
     def flush(self):
-        for i in xrange(len(self.path)):
-            self.pop()
-        self.C = 0
-        self.path_length_counter = 0
+        for i in xrange(len(self.replay_path)):
+            self._pop()
+        self.path.fill(0)
+        self.path_start_index = 0
+        self.path_end_index = 0
 
 
 class ReplayMemory(object):

@@ -4,6 +4,7 @@ import pygame
 from interfaces import Environment
 import numpy as np
 import os
+from random import choice
 from embedding_dqn.rmax_learner import AbstractState
 
 GRID_COLOR = (0, 0, 0)
@@ -14,6 +15,7 @@ WALL_COLOR = (0, 0, 0)
 KEY_COLOR = (218,165,32)
 DOOR_COLOR = (50, 50, 255)
 TRAP_COLOR = (255, 0, 0)
+
 
 # ACTIONS
 NORTH = 0
@@ -133,9 +135,44 @@ class ToyMR(Environment):
         #self.draw()
         self.generate_new_state()
 
+    def flood(self, (y, x), symbol, unchecked_sections, whole_room):
+        height = len(whole_room)
+        width = len(whole_room[0])
+        flood_area = set([(y, x)])
+        to_flood = set([(y, x)])
+        while to_flood:
+            (y, x) = next(iter(to_flood))
+            unchecked_sections.remove((y, x))
+            to_flood.remove((y, x))
+            neighbors = [(y, x) for (y, x) in [(y + 1, x), (y - 1, x), (y, x - 1), (y, x + 1)]
+                         if 0 <= x < width and 0 <= y < height and (y, x) in unchecked_sections
+                         and whole_room[y][x] == symbol]
+            for n in neighbors:
+                to_flood.add(n)
+                flood_area.add(n)
+        return flood_area
+    def check_room_abstraction_consistency(self, whole_room, room_number):
+        height = len(whole_room)
+        width = len(whole_room[0])
+        unchecked_sections = set([(y, x) for x in range(width) for y in range(height)
+                                  if whole_room[y][x] != '|'])
+        symbol_area_mapping = dict()
+        while unchecked_sections:
+            (y, x) = section_to_check = next(iter(unchecked_sections))
+            symbol = whole_room[y][x]
+            flood_area = self.flood((y,x), symbol, unchecked_sections, whole_room)
+            if symbol in symbol_area_mapping:
+                raise Exception('Improper Abstraction in Room %s with symbol %s' % (room_number, symbol))
+            else:
+                symbol_area_mapping[symbol] = flood_area
+
+
+
+
     def parse_abs_file(self, abs_file):
         r = -1
         rooms = {}
+        whole_room = []
         with open(abs_file) as f:
             lines = f.read().splitlines()
         for line in lines:
@@ -147,13 +184,21 @@ class ToyMR(Environment):
                 r = 0
             else:
                 if len(line) == 0:
+                    self.check_room_abstraction_consistency(whole_room, curr_loc)
+                    whole_room = []
                     rooms[curr_loc] = room
                     r = -1
                 elif line == 'G':
                     goal_room = room
                 else:
+                    whole_room.append(line)
                     for c, char in enumerate(line):
-                        room[c, r] = char
+                        if char == '|':
+                            # make sure this symbol is a wall
+                            if (c, r) not in self.rooms[curr_loc].walls:
+                                raise Exception('No wall at \'l\' location')
+                        else:
+                            room[c, r] = char
                     r += 1
         if r >= 0:
             rooms[curr_loc] = room
@@ -331,7 +376,7 @@ class ToyMR(Environment):
             for y in range(min_y, min_y + h):
                 rect.add((x, y))
         return rect
-    #@profile
+
     def generate_new_state(self):
         self.render_screen()
         image = pygame.surfarray.array3d(self.screen)
@@ -370,7 +415,46 @@ class ToyMR(Environment):
 
         return tuple(sorted(attrs.items()))
 
+    def oo_abstraction(self, state):
+        # create attributes
+        attrs = dict()
+        loc_att = self.room.loc
+        attrs['.loc'] = loc_att
+        attrs['.num_keys'] = self.num_keys
+
+        for i, val in enumerate(self.keys.values()):
+            attrs['key_%s' % i] = val
+
+        for i, val in enumerate(self.doors.values()):
+            attrs['door_%s' % i] = val
+
+        return tuple(sorted(attrs.items()))
+
     def predicate_func(self, l1_state):
+
+        s = dict(l1_state)
+        room = s['.loc']
+        num_keys = s['.num_keys']
+
+        # create predicates
+        preds = dict()
+        for i, (key_room, key_pos) in enumerate(self.keys):
+            pred = False
+            if key_room == room:
+                pred = s['key_%s' % i]
+            preds['key_%s_in' % i] = pred
+        for i, (door_room, door_pos) in enumerate(self.doors):
+            pred = False
+            pred_key_door = False
+            if door_room == room:
+                pred = s['door_%s' % i]
+                pred_key_door = pred and num_keys >= 1
+            preds['door_%s_in' % i] = pred
+            preds['door_key_%s_in' % i] = pred_key_door
+
+        return tuple(sorted(preds.items()))
+
+    def sector_predicate_func(self, l1_state):
 
         s = dict(l1_state)
         (room, sector) = s['.loc']
@@ -436,7 +520,8 @@ class ToyMR(Environment):
 
         if self.use_gui:
             pygame.display.update()
-            self.generate_new_state()
+
+        self.generate_new_state()
 
     def is_current_state_terminal(self):
         return self.terminal or self.action_ticker > self.max_num_actions

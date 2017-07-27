@@ -5,6 +5,7 @@ import tensorflow as tf
 import numpy as np
 import tf_helpers as th
 import replay_memory_pc as replay_memory
+from cts import cpp_cts
 
 from cts import pc_cts
 
@@ -148,11 +149,11 @@ class MultiHeadedDQLearner():
         else:
             self.maxQ = tf.reduce_max(self.q_target, reduction_indices=1)
 
-        self.r = tf.sign(self.inp_reward)
+        self.r = self.inp_reward
         use_backup = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32)
         self.y = self.r + use_backup * gamma * self.maxQ
-        self.delta = tf.reduce_sum(self.inp_actions * self.q_online, reduction_indices=1) - self.y
-        self.error = tf.select(tf.abs(self.delta) < error_clip, 0.5 * tf.square(self.delta),
+        self.delta = tf.reduce_sum(self.inp_actions * self.q_online, axis=1) - self.y
+        self.error = tf.where(tf.abs(self.delta) < error_clip, 0.5 * tf.square(self.delta),
                                error_clip * tf.abs(self.delta))
         self.loss = tf.reduce_sum(self.error)
         self.g = tf.gradients(self.loss, self.q_online)
@@ -238,7 +239,7 @@ class MultiHeadedDQLearner():
             self.abs_neighbors[key_init] = set()
             self.abs_neighbors[key_init].add(key_init)
 
-            self.cts[key_init] = pc_cts.LocationDependentDensityModel((11, 12), lambda x, y: x, pc_cts.L_shaped_context)
+            self.cts[key_init] = cpp_cts.CPP_CTS(11, 12, 3)
 
         for steps in range(max_episode_steps):
             if environment.is_current_state_terminal():
@@ -269,9 +270,10 @@ class MultiHeadedDQLearner():
             #     reward = 0
 
             enc_s = self.encoding_func(environment)
-            log_p = self.cts[key_init].update(enc_s)
-            p = np.exp(log_p)
-            R_plus = (1 - is_terminal) * (self.beta * np.power(p + 0.01, -0.5))
+            # p, p_prime = self.cts[key_init].prob_update(enc_s)
+            # n_hat = 0 if p_prime == p else (p * (1 - p_prime))/(p_prime - p)
+            n_hat = max(self.cts[key_init].psuedo_count_for_image(enc_s), 0)
+            R_plus = (1 - is_terminal) * (self.beta * np.power(n_hat + 0.01, -0.5))
 
             self.replay_buffer.append(state[-1], initial_l1_state_vec, abs_vec_func(new_l1_state), action, R_plus, next_state[-1], enc_s, episode_finished or is_terminal)
             if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
