@@ -48,7 +48,7 @@ def plot_data(
         x, ys, title, xlabel, ylabel, labels=None,
         error_tops=None, error_bots=None,
         ylim=None, yticks=None,
-        save_file=None
+        save_file=None, legend_loc='best'
 ):
     if len(ys) <= 10:
         colors = tableau10
@@ -57,7 +57,7 @@ def plot_data(
 
     # You typically want your plot to be ~1.33x wider than tall.
     # Common sizes: (10, 7.5) and (12, 9)
-    plt.figure(figsize=(12, 9))
+    plt.figure(figsize=(7, 5))
 
     # Remove the plot frame lines. They are unnecessary chartjunk.
     ax = plt.subplot(111)
@@ -99,7 +99,7 @@ def plot_data(
         plt.plot(x, y, color=colors[i], lw=2, label=l)
 
     if labels is not None:
-        plt.legend(loc='upper left')
+        plt.legend(loc=legend_loc)
 
     # Make the title big enough so it spans the entire plot, but don't make it
     # so big that it requires two lines to show.
