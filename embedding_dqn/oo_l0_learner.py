@@ -2,8 +2,9 @@
 import tensorflow as tf
 import numpy as np
 import tf_helpers as th
-import rmax_learner
+import oo_rmax_learner
 from oo_replay_memory import MMCPathTracker
+from oo_replay_memory import MMCPathTrackerExplore
 from oo_replay_memory import ReplayMemory
 
 
@@ -158,7 +159,8 @@ def construct_q_network_weights_only_final(input, dqn_numbers, dqn_max_number, f
         fc1 = th.fully_connected(c3, 512, tf.nn.relu)
     with tf.variable_scope('fc2'):
         q_values = th.fully_connected_weights_2(fc1, dqn_numbers, dqn_max_number, num_actions, lambda x: x)
-    return q_values
+        # q_values_explore = th.fully_connected_weights_2(fc1, dqn_numbers_explore, dqn_max_number, num_actions, lambda x: x)
+    return q_values, None
 
 
 def leaky_relu(x, alpha=0.001):
@@ -196,13 +198,43 @@ def construct_meta_dqn_network(input, abs_state1, abs_state2, frame_history, num
     return q_values
 
 
+def construct_q_loss(
+        q_online, q_target, actions, r, terminated,
+        q_online_prime=None, batch_size=32, gamma=0.99, error_clip=1,
+        mmc_reward=None, mmc_beta=0.0
+):
+    if q_online_prime is not None:
+        maxQ = tf.gather_nd(q_target, tf.transpose(
+            [tf.range(0, batch_size, dtype=tf.int32), tf.cast(tf.argmax(q_online_prime, axis=1), tf.int32)],
+            [1, 0]))
+    else:
+        maxQ = tf.reduce_max(q_target, axis=1)
+
+    use_backup = tf.cast(tf.logical_not(terminated), dtype=tf.float32)
+    y = r + use_backup * gamma * maxQ
+
+    delta_dqn = tf.reduce_sum(actions * q_online, axis=1) - y
+    error_dqn = tf.where(tf.abs(delta_dqn) < error_clip, 0.5 * tf.square(delta_dqn),
+                              error_clip * tf.abs(delta_dqn))
+    if mmc_reward is not None:
+        delta_mmc = tf.reduce_sum(actions * q_online, axis=1) - mmc_reward
+        error_mmc = tf.where(tf.abs(delta_mmc) < error_clip, 0.5 * tf.square(delta_mmc),
+                                  error_clip * tf.abs(delta_mmc))
+        # self.delta = (1. - self.mmc_beta) * self.delta_dqn + self.mmc_beta * self.delta_mmc
+        loss = (1. - mmc_beta) * tf.reduce_sum(error_dqn) + mmc_beta * tf.reduce_sum(
+            error_mmc)
+    else:
+        loss = tf.reduce_sum(error_dqn)
+    return loss
+
+
 class MultiHeadedDQLearner():
     def __init__(self, abs_size, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00025,
-                 replay_start_size=500,
-                 epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=100000,
+                 replay_start_size=5000,
+                 epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
-                 use_mmc=False, max_mmc_path_length=1000, mmc_beta=0.0, max_dqn_number=300, rmax_learner=None,
+                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=0.1, max_dqn_number=300, rmax_learner=None,
                  encoding_func=None, bonus_beta=0.05):
         self.rmax_learner = rmax_learner
         config = tf.ConfigProto()
@@ -228,6 +260,7 @@ class MultiHeadedDQLearner():
         self.abs_neighbors = dict()
         self.gamma = gamma
         self.max_dqn_number = max_dqn_number
+
         # q_constructor = lambda inp: construct_q_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
         #q_constructor = lambda inp: construct_small_network_weights(inp, self.inp_dqn_numbers, max_dqn_number,
         #                                                            frame_history, num_actions)
@@ -236,44 +269,37 @@ class MultiHeadedDQLearner():
                                                                     frame_history, num_actions)
         # q_constructor = lambda inp: construct_dqn_with_subgoal_embedding(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
         # q_constructor = lambda inp: construct_meta_dqn_network(inp, self.inp_abs_state_init, self.inp_abs_state_goal, frame_history, num_actions)
+
         with tf.variable_scope('online'):
             mask_shape = [-1, 1, 1, frame_history]
             mask = tf.reshape(self.inp_mask, mask_shape)
             masked_input = self.inp_frames * mask
-            self.q_online = q_constructor(masked_input)
+            self.q_online, self.q_online_explore = q_constructor(masked_input)
         with tf.variable_scope('target'):
             mask_shape = [-1, 1, 1, frame_history]
             sp_mask = tf.reshape(self.inp_sp_mask, mask_shape)
             masked_sp_input = self.inp_sp_frames * sp_mask
-            self.q_target = q_constructor(masked_sp_input)
+            self.q_target, self.q_target_explore = q_constructor(masked_sp_input)
 
         if double:
             with tf.variable_scope('online', reuse=True):
-                self.q_online_prime = q_constructor(masked_sp_input)
+                self.q_online_prime, self.q_online_prime_explore = q_constructor(masked_sp_input)
                 print self.q_online_prime
-            self.maxQ = tf.gather_nd(self.q_target, tf.transpose(
-                [tf.range(0, batch_size, dtype=tf.int32), tf.cast(tf.argmax(self.q_online_prime, axis=1), tf.int32)],
-                [1, 0]))
         else:
-            self.maxQ = tf.reduce_max(self.q_target, axis=1)
+            self.q_online_prime = None
+            self.q_online_prime_explore = None
 
-        self.r = self.inp_reward
-        use_backup = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32)
-        self.y = self.r + use_backup * gamma * self.maxQ
+        self.loss = construct_q_loss(self.q_online, self.q_target, self.inp_actions, self.inp_reward,
+                                     self.inp_terminated,
+                                     self.q_online_prime, batch_size, gamma, error_clip, self.inp_mmc_reward,
+                                     mmc_beta)
+        # if True:  # If using explore/exploit nets
+        #     self.loss_explore = construct_q_loss(self.q_online_explore, self.q_target_explore, self.inp_actions, self.inp_reward_explore,
+        #                              self.inp_terminated,
+        #                              self.q_online_prime_explore, batch_size, gamma, error_clip, self.inp_mmc_reward_explore,
+        #                              mmc_beta)
 
-        self.delta_dqn = tf.reduce_sum(self.inp_actions * self.q_online, axis=1) - self.y
-        self.error_dqn = tf.where(tf.abs(self.delta_dqn) < error_clip, 0.5 * tf.square(self.delta_dqn),
-                                  error_clip * tf.abs(self.delta_dqn))
-        if use_mmc:
-            self.delta_mmc = tf.reduce_sum(self.inp_actions * self.q_online, axis=1) - self.inp_mmc_reward
-            self.error_mmc = tf.where(tf.abs(self.delta_mmc) < error_clip, 0.5 * tf.square(self.delta_mmc),
-                                      error_clip * tf.abs(self.delta_mmc))
-            # self.delta = (1. - self.mmc_beta) * self.delta_dqn + self.mmc_beta * self.delta_mmc
-            self.loss = (1. - self.mmc_beta) * tf.reduce_sum(self.error_dqn) + self.mmc_beta * tf.reduce_sum(
-                self.error_mmc)
-        else:
-            self.loss = tf.reduce_sum(self.error_dqn)
-        self.g = tf.gradients(self.loss, self.q_online)
+
         optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, centered=True, epsilon=0.01)
         self.pre_gvs = optimizer.compute_gradients(self.loss, var_list=th.get_vars('online'))
         self.pre_gvs = [(tf.where(tf.is_nan(grad), tf.zeros_like(grad), grad), var) for grad, var in self.pre_gvs]
@@ -285,7 +311,7 @@ class MultiHeadedDQLearner():
         self.use_mmc = use_mmc
         self.replay_buffer = ReplayMemory((84, 84), abs_size, 'uint8', replay_memory_size, frame_history)
         if self.use_mmc:
-            self.mmc_tracker = MMCPathTracker(self.replay_buffer, self.max_mmc_path_length, self.gamma)
+            self.mmc_tracker = MMCPathTrackerExplore(self.replay_buffer, self.max_mmc_path_length, self.gamma)
         self.frame_history = frame_history
         self.replay_start_size = replay_start_size
         self.epsilon = [epsilon_start] * num_abstract_states * num_abstract_states
@@ -311,7 +337,7 @@ class MultiHeadedDQLearner():
 
         self.encoding_func = encoding_func
         self.bonus_beta = bonus_beta
-        self.reward_mult = 1
+        self.reward_mult = 1. # (10 * self.bonus_beta)/(1-gamma)
 
         ####################
         ## Keeping track of progress of actions
@@ -323,28 +349,42 @@ class MultiHeadedDQLearner():
 
         ####################
 
-    def update_q_values(self):
-        S1, DQNNumbers, A, R, MMC_R, S2, T, M1, M2 = self.replay_buffer.sample(self.batch_size)
+    def update_q_values(self, dqn_distribution=None, cts=None):
+        if dqn_distribution is None:
+            S1, DQNNumbers, A, R, R_explore, MMC_R, MMC_R_explore, S2, T, M1, M2 = self.replay_buffer.sample(self.batch_size)
+        else:
+            S1, DQNNumbers, A, R, R_explore, MMC_R, MMC_R_explore, S2, T, M1, M2 = self.replay_buffer.sample_from_distribution(self.batch_size, dqn_distribution)
+
         Aonehot = np.zeros((self.batch_size, self.num_actions), dtype=np.float32)
         Aonehot[range(len(A)), A] = 1
 
-        [_, loss, q_online, maxQ, q_target, r, y, delta_dqn, g, pre_gvs, post_gvs] = self.sess.run(
-            [self.train_op, self.loss, self.q_online, self.maxQ, self.q_target, self.r, self.y, self.delta_dqn,
-             self.g, self.pre_gvs, self.post_gvs],
+        if cts is not None:
+            for i, (dqn_number, r_explore, mmc_r_explore) in enumerate(zip(DQNNumbers, R_explore, MMC_R_explore)):
+                if dqn_number == 0 or np.random.randint(2) == 0:
+                    DQNNumbers[i] = 0
+                    R[i] = r_explore
+                    MMC_R[i] = mmc_r_explore
+
+        if np.logical_or(np.array(DQNNumbers) < 0, np.array(DQNNumbers) >= self.max_dqn_number).any():
+            print 'DQN Number outside range'
+
+        [_, loss, q_online, q_target, pre_gvs, post_gvs] = self.sess.run(
+            [self.train_op, self.loss, self.q_online, self.q_target, self.pre_gvs, self.post_gvs],
             feed_dict={self.inp_frames: S1, self.inp_actions: Aonehot,
                        self.inp_sp_frames: S2, self.inp_reward: R, self.inp_mmc_reward: MMC_R,
                        self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2,
                        self.inp_dqn_numbers: DQNNumbers})
         return loss
 
-    def run_learning_episode(self, environment, initial_l1_state, goal_l1_state, dqn_number, abs_func, epsilon, max_episode_steps=100000, cts=None):
+    def run_learning_episode(self, environment, initial_l1_state, goal_l1_state, l1_action, dqn_number, abs_func,
+                             epsilon, max_episode_steps=100000, cts=None, dqn_distribution=None):
         episode_steps = 0
         total_reward = 0
         episode_finished = False
         new_l1_state = initial_l1_state
         dqn_tuple = (initial_l1_state, goal_l1_state)
-        if dqn_tuple not in self.epsilon:
-            self.epsilon[dqn_tuple] = 1.0
+        if l1_action not in self.epsilon:
+            self.epsilon[l1_action] = 1.0
 
         for steps in range(max_episode_steps):
             if environment.is_current_state_terminal():
@@ -352,16 +392,26 @@ class MultiHeadedDQLearner():
 
             state = environment.get_current_state()
 
-            if np.random.uniform(0, 1) < epsilon:
-                action = np.random.choice(environment.get_actions_for_state(state))
-                # action = self.get_safe_explore_action(state, environment)
+            if cts is not None:
+                if np.random.uniform(0, 1) < self.global_epsilon:  # self.epsilon[l1_action]:
+                    action = np.random.choice(environment.get_actions_for_state(state))
+                else:
+                    if dqn_number == 0 or np.random.uniform(0, 1) < epsilon:
+                        # action = np.random.choice(environment.get_actions_for_state(state))
+                        # action = self.get_safe_explore_action(state, environment)
+                        action = self.get_action(state, 0)
+                    else:
+                        action = self.get_action(state, dqn_number)
             else:
-                action = self.get_action(state, dqn_number)
+                if np.random.uniform(0, 1) < epsilon:
+                    action = np.random.choice(environment.get_actions_for_state(state))
+                    # action = self.get_safe_explore_action(state, environment)
+                else:
+                    action = self.get_action(state, dqn_number)
 
             if self.replay_buffer.size() > self.replay_start_size:
                 self.global_epsilon = max(self.epsilon_min, self.global_epsilon - self.epsilon_delta)
-                self.epsilon[dqn_tuple] = max(self.epsilon_min, self.epsilon[dqn_tuple] - self.epsilon_delta)
-
+                self.epsilon[l1_action] = max(self.epsilon_min, self.epsilon[l1_action] - self.epsilon_delta)
 
             state, action, env_reward, next_state, is_terminal = environment.perform_action(action)
             total_reward += env_reward
@@ -381,24 +431,26 @@ class MultiHeadedDQLearner():
             else:
                 enc_s = self.encoding_func(environment)
                 n_hat = cts.psuedo_count_for_image(enc_s)
-                R_plus = (1 - (episode_finished or is_terminal)) * (self.bonus_beta * np.power(n_hat + 0.01, -0.5))
+                R_plus = (1 - is_terminal) * (self.bonus_beta * np.power(n_hat + 0.01, -0.5))
 
-            R_plus = (self.reward_mult * np.sign(reward)) + R_plus
+            # R_plus = (self.reward_mult * np.sign(reward)) + R_plus
+            R = (self.reward_mult * np.sign(reward))
 
-            if dqn_number != -1:
-                if self.use_mmc:
-                    sars = (state[-1], dqn_number, action, R_plus, next_state[-1],
-                            is_terminal or episode_finished)
-                    self.mmc_tracker.append(*sars)
-                    if is_terminal or episode_finished:
-                        self.mmc_tracker.flush()
-                else:
-                    sars = (state[-1], dqn_number, action, R_plus, 0, next_state[-1],
-                            is_terminal or episode_finished)
-                    self.replay_buffer.append(*sars)
+            # if dqn_number != -1:
+            term = is_terminal if cts is not None else (is_terminal or episode_finished)
+            if self.use_mmc:
+                sars = (state[-1], dqn_number, action, R, R_plus, next_state[-1],
+                        term)
+                self.mmc_tracker.append(*sars)
+                if term:
+                    self.mmc_tracker.flush()
+            else:
+                sars = (state[-1], dqn_number, action, R, R_plus, 0, 0, next_state[-1],
+                        term)
+                self.replay_buffer.append(*sars)
 
             if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
-                loss = self.update_q_values()
+                loss = self.update_q_values(dqn_distribution, cts=cts)
             if (self.action_ticker - self.replay_start_size) % self.target_copy_freq == 0:
                 self.sess.run(self.copy_op)
             self.action_ticker += 1

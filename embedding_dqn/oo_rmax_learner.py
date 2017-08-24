@@ -88,7 +88,7 @@ class L1Action(object):
 
 class MovingAverageTable(object):
 
-    def __init__(self, moving_avg_len, num_conf, pred_func):
+    def __init__(self, num_conf, pred_func, moving_avg_len=None):
         self.moving_avg_len = moving_avg_len
         self.num_conf = num_conf
 
@@ -130,24 +130,36 @@ class MovingAverageTable(object):
         else:
             self.valid_transitions[a] = {diff}
 
-        if key not in self.terminal_table:
-            self.terminal_table[key] = deque(maxlen=self.moving_avg_len)
-        self.terminal_table[key].append(float(terminal))
+        if self.moving_avg_len is None:
+            if key not in self.terminal_table:
+                self.terminal_table[key] = 0
+            self.terminal_table[key] += 1
 
-        if key not in self.transition_table:
-            self.transition_table[key] = deque(maxlen=self.moving_avg_len)
-            self.reward_table[key] = deque(maxlen=self.moving_avg_len)
+            if key not in self.transition_table:
+                self.transition_table[key] = 0
+                self.reward_table[key] = 0
 
-        for diff_ in self.valid_transitions[a]:
-            self.transition_table[(diff_, a)].append(1. if diff == diff_ else 0.)
-        self.reward_table[key].append(r)
+            self.transition_table[key] += 1
+            self.reward_table[key] += r
+        else:
+            if key not in self.terminal_table:
+                self.terminal_table[key] = deque(maxlen=self.moving_avg_len)
+            self.terminal_table[key].append(float(terminal))
+
+            if key not in self.transition_table:
+                self.transition_table[key] = deque(maxlen=self.moving_avg_len)
+                self.reward_table[key] = deque(maxlen=self.moving_avg_len)
+
+            for diff_ in self.valid_transitions[a]:
+                self.transition_table[(diff_, a)].append(1. if diff == diff_ else 0.)
+            self.reward_table[key].append(r)
 
     def get_p(self, s, a, sp):
         diff = make_diff(s, sp)
 
         return np.mean(self.transition_table[(diff, a)])
 
-    def get_r(self, s, a, sp, evaluation=False):
+    def get_r(self, s, a, sp):
         diff = make_diff(s, sp)
 
         return np.mean(self.reward_table[(diff, a)])
@@ -155,12 +167,15 @@ class MovingAverageTable(object):
     def get_prob_terminal(self, s, a, sp):
         diff = make_diff(s, sp)
 
-        return np.mean(self.terminal_table[(diff, a)])
+        if self.moving_avg_len is None:
+            return self.terminal_table[(diff, a)]/self.transition_table[(diff, a)]
+        else:
+            return np.mean(self.terminal_table[(diff, a)])
 
 
 class OORMaxLearner(interfaces.LearningAgent):
     def __init__(self, abs_size, env, abs_func, pred_func, N=1000, max_VI_iterations=100, value_update_freq=1000, VI_delta=0.01, gamma=0.99, rmax=1,
-                 max_num_abstract_states=10, frame_history=1, restore_file=None,
+                 max_num_abstract_states=10, frame_history=1, restore_file=None, error_clip=1,
                  state_encoder=None, bonus_beta=0.05, cts_size=None):
         self.env = env
         self.abs_size = abs_size
@@ -169,7 +184,7 @@ class OORMaxLearner(interfaces.LearningAgent):
         self.rmax = rmax
         self.gamma = gamma
         self.utopia_val = self.rmax / (1 - self.gamma)
-        self.transition_table = MovingAverageTable(N, 100, pred_func)
+        self.transition_table = MovingAverageTable(100, pred_func)
         self.value_iteration = value_iteration.ValueIteration(gamma, max_VI_iterations, VI_delta)
         self.values = dict()
         self.qs = dict()
@@ -184,20 +199,22 @@ class OORMaxLearner(interfaces.LearningAgent):
         if restore_file is not None:
             restore_network_file = 'oo_net.ckpt'
         self.l0_learner = oo_l0_learner.MultiHeadedDQLearner(abs_size, len(self.env.get_actions_for_state(None)),
-                                                          max_num_abstract_states, frame_history=frame_history,
-                                                          rmax_learner=self, restore_network_file=restore_network_file,
-                                                             encoding_func=state_encoder, bonus_beta=bonus_beta)
+                                                            max_num_abstract_states, frame_history=frame_history,
+                                                            rmax_learner=self, restore_network_file=restore_network_file,
+                                                            encoding_func=state_encoder, bonus_beta=bonus_beta,
+                                                            error_clip=error_clip)
         self.actions_for_pia = dict()  # pia = (predicates, key, attribute)
         self.explore_for_pia = dict()  # holds the reference to all the explore actions
         self.actions = set()  # used to check if actions already exist
         self.states = set()
-        self.current_dqn_number = 0
+        self.current_dqn_number = 1
 
         self.cts = dict()
+        self.global_cts = cpp_cts.CPP_CTS(*cts_size)
         self.encoding_func = state_encoder
         self.bonus_beta = bonus_beta
         self.cts_size = cts_size
-        self.using_global_epsilon = state_encoder is not None
+        self.using_global_epsilon = False # state_encoder is not None
 
         if restore_file is None:
             self.create_new_state(self.abs_func(self.env.get_current_state()))
@@ -225,14 +242,15 @@ class OORMaxLearner(interfaces.LearningAgent):
         for i, val in state:
             pia = (preds, i, val)
             if pia not in self.actions_for_pia:
-                explore_action = L1ExploreAction(state, i, preds, dqn_number=self.current_dqn_number)
-                self.current_dqn_number += 1
+                explore_action = L1ExploreAction(state, i, preds, dqn_number=0)
+                # self.current_dqn_number += 1
 
                 if self.encoding_func is not None:
                     self.cts[explore_action] = cpp_cts.CPP_CTS(*self.cts_size)
 
                 self.actions_for_pia[pia] = [explore_action]
                 self.explore_for_pia[pia] = explore_action
+                self.actions.add(explore_action)
 
         print 'Found new state: %s' % (state,)
 
@@ -241,12 +259,15 @@ class OORMaxLearner(interfaces.LearningAgent):
         preds = self.pred_func(state)
         goal_diff = make_diff(state, goal_state)
         new_action = L1Action(state, goal_state, preds, dqn_number=self.current_dqn_number)
-        if self.encoding_func is not None:
-            self.cts[new_action] = cpp_cts.CPP_CTS(*self.cts_size)
 
         # Check if action already exists
         if new_action in self.actions:
             return
+
+        # The action does not exist, so add it
+
+        if self.encoding_func is not None:
+            self.cts[new_action] = cpp_cts.CPP_CTS(*self.cts_size)
 
         for i, (att, att_goal) in goal_diff:
             pia = (preds, i, att)
@@ -296,7 +317,7 @@ class OORMaxLearner(interfaces.LearningAgent):
 
                         sp = apply_diff(s, diff)
                         p = self.transition_table.get_p(s, a, sp) / Z
-                        r = self.get_reward(s, a, sp, evaluation=evaluation)
+                        r = self.get_reward(s, a, sp)
                         t = self.transition_table.get_prob_terminal(s, a, sp)
 
                         transitions_sa.append((sp, p, r, t))
@@ -320,13 +341,13 @@ class OORMaxLearner(interfaces.LearningAgent):
                     actions.append(a)
         return actions
 
-    def get_reward(self, s, a, sp, evaluation=False):
+    def get_reward(self, s, a, sp):
         # if evaluation:
         #     return self.transition_table.get_r(s, a, sp, evaluation=evaluation)
         # else:
         #     prop = self.l0_learner.replay_buffer.abstract_action_proportions(self.abs_vec_func(s), self.abs_vec_func(sp))
         #     return max(0, 1./len(self.transition_table.actions) - prop)
-        return self.transition_table.get_r(s, a, sp, evaluation=evaluation)
+        return self.transition_table.get_r(s, a, sp)
 
     def run_learning_episode(self, environment):
         total_episode_steps = 0
@@ -352,8 +373,11 @@ class OORMaxLearner(interfaces.LearningAgent):
             a = self.get_l1_action(s)
 
             if self.using_global_epsilon:
-                epsilon = self.l0_learner.global_epsilon
-                eval_action = False
+                if a.dqn_number not in self.l0_learner.epsilon:
+                    self.l0_learner.epsilon[a.dqn_number] = 1.0
+                epsilon = self.l0_learner.epsilon[a.dqn_number]
+                # epsilon = self.l0_learner.global_epsilon
+                eval_action = True
                 sys.stdout.write('Executing action: %s -- eps: %.6f ... ' % (a, epsilon))
             else:
                 if type(a) is not L1ExploreAction and np.random.uniform(0, 1) < 0.1:
@@ -373,10 +397,12 @@ class OORMaxLearner(interfaces.LearningAgent):
             dqn_number = a.dqn_number
 
             cts = None if self.encoding_func is None else self.cts[a]
-            episode_steps, R, sp = self.l0_learner.run_learning_episode(self.env, s, s_goal,
+            dqn_distribution = None  # self.get_dqn_distribution()
+
+            episode_steps, R, sp = self.l0_learner.run_learning_episode(self.env, s, s_goal, a,
                                                                         dqn_number, self.abs_func, epsilon,
                                                                         max_episode_steps=1000,
-                                                                        cts=cts)
+                                                                        cts=cts, dqn_distribution=dqn_distribution)
 
             if type(a) is not L1ExploreAction:
                 true_diff = make_diff(s, sp)
@@ -410,6 +436,7 @@ class OORMaxLearner(interfaces.LearningAgent):
                             explore_action.count >= self.transition_table.num_conf and \
                             len(self.get_all_actions_for_state(s)) > 1:
                         self.actions_for_pia[pia].remove(explore_action)
+                        self.actions.remove(explore_action)
                         changed = True
                 if changed:
                     self.run_vi()
@@ -430,6 +457,20 @@ class OORMaxLearner(interfaces.LearningAgent):
             self.value_update_counter += 1
 
         return total_episode_steps, total_reward
+
+    def get_dqn_distribution(self):
+        dist = dict()
+        epsilon = 0.1
+        for a in self.actions:
+            if a in self.transition_table.a_count and self.transition_table.a_count[a] >= 1:
+                p = 0
+                if type(a) is not L1ExploreAction:
+                    p = self.transition_table.get_success_rate(a)
+                dist[a.dqn_number] = 1 - p + epsilon
+        sum = np.sum(dist.values())
+        for key in dist:
+            dist[key] /= sum
+        return dist
 
     def get_l1_action(self, state, evaluation=False):
         if evaluation:

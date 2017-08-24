@@ -1,7 +1,7 @@
 import numpy as np
 import toy_mr
 
-SYMBOLS = [toy_mr.WALL_CODE, toy_mr.KEY_CODE, toy_mr.DOOR_CODE, toy_mr.TRAP_CODE, toy_mr.AGENT_CODE]
+SYMBOLS = [toy_mr.WALL_CODE, toy_mr.KEY_CODE, toy_mr.DOOR_CODE, toy_mr.TRAP_CODE, toy_mr.AGENT_CODE, toy_mr.LIVES_CODE]
 ENCODING_LENGTH = int(np.log2(np.max(SYMBOLS))) + 1
 
 def encode_toy_mr_state(env):
@@ -27,6 +27,8 @@ def encode_toy_mr_state(env):
     symbols[env.agent] = toy_mr.AGENT_CODE
 
     for i in range(env.num_keys):
-        symbols[i, h] = 1
+        symbols[i, h] = toy_mr.KEY_CODE
+    for i in range(env.lives):
+        symbols[w-1-i, h] = toy_mr.LIVES_CODE
 
     return symbols

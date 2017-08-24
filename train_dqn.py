@@ -8,6 +8,7 @@ import atari
 import dq_learner
 import atari_dqn
 import coin_game
+import toy_mr
 import wind_tunnel
 import daqn
 #import tabular_dqn
@@ -83,7 +84,11 @@ def train(agent, env, test_epsilon, results_dir):
                 agent.save_network('%s/%s_best_net.ckpt' % (results_dir, game))
 
             print 'Mean Reward:', mean_reward, 'Best:', best_eval_reward
-            results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
+
+            if getattr(env, 'get_discovered_rooms', None):
+                results_file.write('Step: %d -- Mean reward: %.2f -- Num Rooms: %s\n' % (step_num, mean_reward, len(env.get_discovered_rooms())))
+            else:
+                results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
             results_file.flush()
 
         # steps_until_vis_update -= episode_steps
@@ -122,7 +127,10 @@ def train_double_dqn(env, num_actions):
     training_epsilon = 0.01
     test_epsilon = 0.001
 
-    frame_history = 4
+    # frame_history = 4
+
+    frame_history = 1
+
     dqn = atari_dqn.AtariDQN(frame_history, num_actions)
     agent = dq_learner.DQLearner(dqn, num_actions, frame_history=frame_history, epsilon_end=training_epsilon)
 
@@ -188,11 +196,17 @@ def setup_tabular_env():
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
+def setup_toy_mr_env():
+    env = toy_mr.ToyMR('./mr_maps/full_mr_map.txt', abstraction_file='./mr_maps/full_mr_map_abs.txt', use_gui=True)
+    num_actions = len(env.get_actions_for_state(None))
+    return env, num_actions
 
-game = 'freeway'
+
+# game = 'freeway'
 # train_dqn(*setup_atari_env())
 # train_dqn(*setup_coin_env())
-train_double_dqn(*setup_atari_env())
+game = 'toy_mr'
+train_double_dqn(*setup_toy_mr_env())
 # train_daqn(*setup_coin_env())
 # train_daqn_priors(*setup_coin_env())
 # train_dqn_priors(*setup_coin_env())

@@ -26,40 +26,43 @@ class LocationDependentDensityModel(object):
     """
 
     def __init__(self, frame_shape, to_symbol_func, context_func, alphabet=None):
-
-        # For efficiency, we'll pre-process the frame into our internal representation.
-        self.symbol_frame = np.zeros((frame_shape[0:2]), dtype=np.uint32)
-
-        context_length = len(context_func(self.symbol_frame, -1, -1))
         self.models = np.zeros(frame_shape[0:2], dtype=object)
 
         for y in range(frame_shape[0]):
             for x in range(frame_shape[1]):
-                self.models[y, x] = model.CTS(context_length=context_length, alphabet=alphabet)
+                self.models[y, x] = model.CTS(context_length=4, alphabet=alphabet)
 
         self.context_func = context_func
         self.to_symbol_func = to_symbol_func
 
     def update(self, frame):
-        self.symbol_frame = self.to_symbol_func(frame, self.symbol_frame)
-
         total_log_probability = 0.0
-        for y in range(self.symbol_frame.shape[0]):
-            for x in range(self.symbol_frame.shape[1]):
-                context = self.context_func(self.symbol_frame, y, x)
-                colour = self.symbol_frame[y, x]
+        for y in range(frame.shape[0]):
+            for x in range(frame.shape[1]):
+                context = self.context_func(frame, y, x)
+                colour = frame[y, x]
                 total_log_probability += self.models[y, x].update(context=context, symbol=colour)
 
         return total_log_probability
 
     def log_prob(self, frame):
-        self.symbol_frame = self.to_symbol_func(frame, self.symbol_frame)
-
         total_log_probability = 0.0
-        for y in range(self.symbol_frame.shape[0]):
-            for x in range(self.symbol_frame.shape[1]):
-                context = self.context_func(self.symbol_frame, y, x)
-                colour = self.symbol_frame[y, x]
+        for y in range(frame.shape[0]):
+            for x in range(frame.shape[1]):
+                context = self.context_func(frame, y, x)
+                colour = frame[y, x]
                 total_log_probability += self.models[y, x].log_prob(context=context, symbol=colour)
 
         return total_log_probability
+
+    def psuedo_count_for_image(self, frame):
+        p = self.update(frame)
+        rec_p = self.log_prob(frame)
+
+        p_exp = np.exp(p)
+        rec_p_exp = np.exp(rec_p)
+
+        if (p_exp >= rec_p_exp):
+            return 0
+        else:
+            return p_exp * (1 - rec_p_exp)/(rec_p_exp - p_exp)

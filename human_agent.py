@@ -3,8 +3,7 @@ import pygame
 import datetime
 
 from embedding_dqn import mr_environment
-from embedding_dqn.abstraction_tools import montezumas_abstraction as ma
-from embedding_dqn.abstraction_tools import mr_abstraction_ram as mr_abs
+from embedding_dqn.abstraction_tools import mr_abstraction_no_sectors as mr_abs
 
 game_dir = './roms'
 game = 'montezuma_revenge'
@@ -24,11 +23,10 @@ if __name__ == "__main__":
     # create Atari environment
     # env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', frame_skip=1, terminate_on_end_life=True)
     env = mr_environment.MREnvironment(game_dir + '/' + game + '.bin', frame_skip=1, terminate_on_end_life=True, use_gui=True)
-    env.set_abstraction(abstraction)
     num_actions = len(env.ale.getMinimalActionSet())
     abstraction.update_state(env.getRAM())
     abstraction.env = env
-    l1_state = abstraction.get_abstract_state()
+    l1_state = abstraction.oo_abstraction_function(None)
 
     right = False
     left = False
@@ -46,8 +44,7 @@ if __name__ == "__main__":
         if env.is_current_state_terminal():
             print 'TERMINAL'
             env.reset_environment()
-            abstraction.update_state(env.getRAM())
-            l1_state = abstraction.get_abstract_state()
+            l1_state = abstraction.oo_abstraction_function(None)
             print l1_state
 
         # respond to human input
@@ -93,9 +90,10 @@ if __name__ == "__main__":
             action = bitKeysMap[bitfield]
             env.perform_atari_action(action)
 
-            new_l1_state = abstraction.abstraction_function(None)
-
+            new_l1_state = abstraction.oo_abstraction_function(None)
             if new_l1_state != l1_state:
                 l1_state = new_l1_state
-                print l1_state
+                print l1_state, abstraction.predicate_func(l1_state)
+
+
 
