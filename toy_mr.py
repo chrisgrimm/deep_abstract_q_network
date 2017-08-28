@@ -196,7 +196,7 @@ class ToyMR(Environment):
                         if char == '|':
                             # make sure this symbol is a wall
                             if (c, r) not in self.rooms[curr_loc].walls:
-                                raise Exception('No wall at \'l\' location')
+                                raise Exception('No wall at \'(%s, %s)\' location' % (curr_loc, (c, r)))
                         else:
                             room[c, r] = char
                     r += 1
@@ -643,7 +643,8 @@ class ToyMR(Environment):
         self.render_screen()
 
         # update the display
-        pygame.display.update()
+        if self.use_gui == True:
+            pygame.display.update()
 
     def refresh_gui(self):
         current_time = datetime.datetime.now()
@@ -659,10 +660,92 @@ class ToyMR(Environment):
         rect = (coord[0] * self.tile_size, coord[1] * self.tile_size + self.hud_height, self.tile_size, self.tile_size)
         pygame.draw.rect(self.screen, color, rect)
 
+    def save_map(self, file_name, draw_sectors=False):
+
+        map_h = 4
+        map_w = 9
+
+        map = pygame.Surface((self.tile_size * self.room.size[0] * map_w, self.tile_size * self.room.size[1] * map_h))
+        map.fill(BACKGROUND_COLOR)
+
+        for room_loc in self.rooms:
+            room = self.rooms[room_loc]
+
+            room_x, room_y = room_loc
+            room_x = (room_x - 1) * self.tile_size * room.size[0]
+            room_y = (room_y - 1) * self.tile_size * room.size[1]
+
+            if room == self.goal_room:
+                rect = (room_x, room_y, self.tile_size * room.size[0], self.tile_size * room.size[1])
+                pygame.draw.rect(map, (0, 255, 255), rect)
+
+                myfont = pygame.font.SysFont('Helvetica', 85)
+
+                # render text
+                label = myfont.render("G", True, (0, 0, 0))
+                label_rect = label.get_rect(center=(room_x + (self.tile_size * room.size[0])/2, room_y + (self.tile_size * room.size[1])/2))
+                map.blit(label, label_rect)
+                continue
+
+            # draw sectors
+            if draw_sectors:
+                tableau20 = [(31, 119, 180), (174, 199, 232), (255, 127, 14), (255, 187, 120),
+                             (44, 160, 44), (152, 223, 138), (255, 152, 150),
+                             (148, 103, 189), (197, 176, 213), (140, 86, 75), (196, 156, 148),
+                             (227, 119, 194), (247, 182, 210), (127, 127, 127), (199, 199, 199),
+                             (188, 189, 34), (219, 219, 141), (23, 190, 207), (158, 218, 229)]
+                for row in range(self.room.size[1]):
+                    for column in range(self.room.size[0]):
+                        pos = (row, column)
+                        if pos not in self.rooms_abs[room_loc]:
+                            continue
+                        sector = self.sector_for_loc(room_loc, pos)
+                        color = tableau20[2 * sector + ((room_loc[0] + room_loc[1]) % 2 == 0)]
+                        rect = (row * self.tile_size + room_x, column * self.tile_size + room_y, self.tile_size, self.tile_size)
+                        pygame.draw.rect(map, color, rect)
+
+            # loop through each row
+            for row in range(self.room.size[1] + 1):
+                pygame.draw.line(map, GRID_COLOR, (room_x, row * self.tile_size + room_y),
+                                 (room.size[1] * self.tile_size + room_x, row * self.tile_size + room_y))
+            for column in range(self.room.size[0] + 1):
+                pygame.draw.line(map, GRID_COLOR, (column * self.tile_size + room_x, room_y),
+                                 (column * self.tile_size + room_x, room.size[0] * self.tile_size + room_y))
+
+            # draw walls
+            for coord in room.walls:
+                rect = (coord[0] * self.tile_size + room_x, coord[1] * self.tile_size + room_y, self.tile_size, self.tile_size)
+                pygame.draw.rect(map, WALL_COLOR, rect)
+
+            # draw key
+            for coord in room.keys:
+                rect = (coord[0] * self.tile_size + room_x, coord[1] * self.tile_size + room_y, self.tile_size, self.tile_size)
+                pygame.draw.rect(map, KEY_COLOR, rect)
+
+            # draw doors
+            for coord in room.doors:
+                rect = (coord[0] * self.tile_size + room_x, coord[1] * self.tile_size + room_y, self.tile_size, self.tile_size)
+                pygame.draw.rect(map, DOOR_COLOR, rect)
+
+            # draw traps
+            for coord in room.traps:
+                rect = (coord[0] * self.tile_size + room_x, coord[1] * self.tile_size + room_y, self.tile_size, self.tile_size)
+                pygame.draw.rect(map, TRAP_COLOR, rect)
+
+        pygame.image.save(map, './'+file_name+'.png')
+
+
 if __name__ == "__main__":
     map_file = 'mr_maps/full_mr_map.txt'
     abs_file = 'mr_maps/full_mr_map_abs.txt'
-    game = ToyMR(map_file, abstraction_file=abs_file, use_gui=True)
+    game = ToyMR(map_file, abstraction_file=abs_file, use_gui=False)
+
+    map_image_file = 'mr_maps/full_mr_map'
+    game.save_map(map_image_file)
+    map_image_file = 'mr_maps/full_mr_map_sectors'
+    game.save_map(map_image_file, draw_sectors=True)
+
+    pygame.image.save(game.screen, './' + 'example_input' + '.png')
 
     l1_state = game.oo_sector_abstraction(None)
     print l1_state, game.predicate_func(l1_state)
