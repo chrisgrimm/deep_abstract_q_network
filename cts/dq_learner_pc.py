@@ -2,21 +2,19 @@ import interfaces
 import tensorflow as tf
 import numpy as np
 import tf_helpers as th
-from cts import atari_encoder
 from cts import cpp_cts
 from cts import pc_cts
-from cts import toy_mr_encoder
 from replay_memory_pc import ReplayMemory
 from replay_memory_pc import MMCPathTracker2 as MMCPathTracker
 
 
 class DQLearner(interfaces.LearningAgent):
 
-    def __init__(self, dqn, num_actions, gamma=0.99, learning_rate=0.00025, replay_start_size=5000,
+    def __init__(self, dqn, num_actions, gamma=0.99, learning_rate=0.00025, replay_start_size=50000,
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
-                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=0.5,
+                 use_mmc=True, max_mmc_path_length=1000, mmc_beta=0.1,
                  state_encoder=None, bonus_beta=0.05, cts_size=None):
         self.dqn = dqn
         config = tf.ConfigProto()
@@ -143,6 +141,7 @@ class DQLearner(interfaces.LearningAgent):
             enc_s = self.encoding_func(environment)
             n_hat = self.cts.psuedo_count_for_image(enc_s)
             R_plus = np.sign(reward) + (1 - is_terminal) * (self.bonus_beta * np.power(n_hat + 0.01, -0.5))
+            R_plus = 1 if R_plus > 1 else R_plus
 
             if self.use_mmc:
                 sars = (state[-1], action, R_plus, next_state[-1], is_terminal)

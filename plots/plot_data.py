@@ -99,7 +99,12 @@ def plot_data(
         plt.plot(x, y, color=colors[i], lw=2, label=l)
 
     if labels is not None:
-        plt.legend(loc=legend_loc)
+        # Shrink current axis
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width * 0.7, box.height])
+
+        # Put a legend to the right of the current axis
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fancybox=True, framealpha=0.0)
 
     # Make the title big enough so it spans the entire plot, but don't make it
     # so big that it requires two lines to show.

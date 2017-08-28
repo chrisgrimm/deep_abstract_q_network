@@ -62,7 +62,7 @@ def train(agent, env, test_epsilon, results_dir):
     best_eval_reward = - float('inf')
     while step_num < num_steps:
         env.reset_environment()
-        env.terminate_on_end_life = True
+        # env.terminate_on_end_life = True
         start_time = datetime.datetime.now()
         episode_steps, episode_reward = agent.run_learning_episode(env)
         end_time = datetime.datetime.now()
@@ -86,7 +86,12 @@ def train(agent, env, test_epsilon, results_dir):
                 agent.save_network('%s/%s_best_net.ckpt' % (results_dir, game))
 
             print 'Mean Reward:', mean_reward, 'Best:', best_eval_reward
-            results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
+
+            if getattr(env, 'get_discovered_rooms', None):
+                results_file.write('Step: %d -- Mean reward: %.2f -- Num Rooms: %s\n' % (step_num, mean_reward, len(env.get_discovered_rooms())))
+            else:
+                results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
+
             results_file.flush()
 
 def train_dqn(env, num_actions):
@@ -95,24 +100,32 @@ def train_dqn(env, num_actions):
     training_epsilon = 0.1
     test_epsilon = 0.05
 
-    frame_history = 1
+    # frame_history = 1
+    # enc_func = toy_mr_encoder.encode_toy_mr_state
+    # cts_size = (11, 12, 6)
+
+    frame_history = 4
+    cts_size = (42, 42, 8)
+    enc_func = atari_encoder.encode_state
+
     dqn = atari_dqn.AtariDQN(frame_history, num_actions, shared_bias=False)
-    agent = dq_learner_pc.DQLearner(dqn, num_actions, target_copy_freq=10000, epsilon_end=training_epsilon, double=False, frame_history=frame_history)
+    agent = dq_learner_pc.DQLearner(dqn, num_actions, target_copy_freq=10000, epsilon_end=training_epsilon, double=False, frame_history=frame_history,
+                                    state_encoder=enc_func, cts_size=cts_size)
     train(agent, env, test_epsilon, results_dir)
 
 def train_double_dqn(env, num_actions):
-    results_dir = './results/double_dqn/' + game
+    results_dir = './results/double_dqn/' + game + '_lives_repeat_action'
 
     training_epsilon = 0.01
     test_epsilon = 0.001
 
-    # frame_history = 1
-    # enc_func = toy_mr_encoder.encode_toy_mr_state
-    # cts_size = (11, 12, 3)
+    frame_history = 1
+    enc_func = toy_mr_encoder.encode_toy_mr_state
+    cts_size = (11, 12, 7)
 
-    frame_history = 4
-    cts_size = (42, 42, 3)
-    enc_func = atari_encoder.encode_state
+    # frame_history = 4
+    # cts_size = (42, 42, 8)
+    # enc_func = atari_encoder.encode_state
 
     dqn = atari_dqn.AtariDQN(frame_history, num_actions)
     agent = dq_learner_pc.DQLearner(dqn, num_actions, frame_history=frame_history, epsilon_end=training_epsilon,
@@ -122,17 +135,19 @@ def train_double_dqn(env, num_actions):
 
 def setup_atari_env():
     # create Atari environment
-    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', use_gui=True)
+    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', use_gui=True, repeat_action_probability=0.25)
     num_actions = len(env.ale.getMinimalActionSet())
     return env, num_actions
 
 def setup_toy_mr_env():
-    env = toy_mr.ToyMR('../mr_maps/full_mr_map.txt')
+    env = toy_mr.ToyMR('../mr_maps/full_mr_map.txt', max_lives=5, repeat_action_probability=0.25)
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
 
-game = 'montezuma_revenge'
 # train_dqn(*setup_coin_env())
-# train_double_dqn(*setup_toy_mr_env())
-train_double_dqn(*setup_atari_env())
+game = 'toy_mr'
+train_double_dqn(*setup_toy_mr_env())
+# game = 'montezuma_revenge'
+# train_dqn(*setup_atari_env())
+# train_double_dqn(*setup_atari_env())

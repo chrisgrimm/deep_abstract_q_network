@@ -8,13 +8,14 @@ from random import choice
 from embedding_dqn.rmax_learner import AbstractState
 
 GRID_COLOR = (0, 0, 0)
-BACKGROUND_COLOR = (255, 255,  255)
+BACKGROUND_COLOR = (255, 255, 255)
 
-AGENT_COLOR = (100, 100,  100)
+AGENT_COLOR = (100, 100, 100)
 WALL_COLOR = (0, 0, 0)
 KEY_COLOR = (218,165,32)
 DOOR_COLOR = (50, 50, 255)
 TRAP_COLOR = (255, 0, 0)
+LIVES_COLOR = (0, 255, 0)
 
 
 # ACTIONS
@@ -29,6 +30,7 @@ KEY_CODE = 2
 DOOR_CODE = 3
 TRAP_CODE = 4
 AGENT_CODE = 5
+LIVES_CODE = 5
 
 class Room():
 
@@ -93,7 +95,7 @@ class ToyMRAbstractState(AbstractState):
 
 class ToyMR(Environment):
 
-    def __init__(self, map_file, abstraction_file=None, max_num_actions=10000, use_gui=True):
+    def __init__(self, map_file, abstraction_file=None, max_num_actions=10000, max_lives=1, repeat_action_probability=0.0, use_gui=True):
 
         self.rooms, self.starting_room, self.starting_cell, self.goal_room, self.keys, self.doors = self.parse_map_file(map_file)
         if abstraction_file is not None:
@@ -103,8 +105,22 @@ class ToyMR(Environment):
         self.room = self.starting_room
         self.agent = self.starting_cell
         self.num_keys = 0
+        self.max_lives = max_lives
+        self.lives = max_lives
+        self.enter_cell = self.agent
+        self.repeat_action_probability = repeat_action_probability
+        self.previous_action = 0
         self.terminal = False
         self.max_num_actions = max_num_actions
+        self.discovered_rooms = set()
+
+        self.key_neighbor_locs = []
+        self.door_neighbor_locs = []
+        if abstraction_file is not None:
+            for i, (key_room, key_pos) in enumerate(self.keys):
+                self.key_neighbor_locs.append(self.neighbor_locs(key_room, key_pos))
+            for i, (door_room, door_pos) in enumerate(self.doors):
+                self.door_neighbor_locs.append(self.neighbor_locs(door_room, door_pos))
 
         self.use_gui = use_gui
 
@@ -151,6 +167,7 @@ class ToyMR(Environment):
                 to_flood.add(n)
                 flood_area.add(n)
         return flood_area
+
     def check_room_abstraction_consistency(self, whole_room, room_number):
         height = len(whole_room)
         width = len(whole_room[0])
@@ -165,9 +182,6 @@ class ToyMR(Environment):
                 raise Exception('Improper Abstraction in Room %s with symbol %s' % (room_number, symbol))
             else:
                 symbol_area_mapping[symbol] = flood_area
-
-
-
 
     def parse_abs_file(self, abs_file):
         r = -1
@@ -257,7 +271,7 @@ class ToyMR(Environment):
             raise Exception('You must specify a starting location and goal room')
         return rooms, starting_room, starting_cell, goal_room, keys, doors
 
-    def _move_agent(self, action):
+    def _get_delta(self, action):
         dx = 0
         dy = 0
         if action == NORTH:
@@ -268,10 +282,17 @@ class ToyMR(Environment):
             dx = 1
         elif action == WEST:
             dx = -1
+        return dx, dy
 
+    def _move_agent(self, action):
+        dx, dy = self._get_delta(action)
         return (self.agent[0] + dx, self.agent[1] + dy)
 
     def perform_action(self, action):
+        if self.repeat_action_probability > 0:
+            if np.random.uniform() < self.repeat_action_probability:
+                action = self.previous_action
+            self.previous_action = action
 
         start_state = self.get_current_state()
 
@@ -308,9 +329,11 @@ class ToyMR(Environment):
 
                     self.room = new_room
                     self.agent = new_agent
+                    self.enter_cell = new_agent
             else:
                 self.room = new_room
                 self.agent = new_agent
+                self.enter_cell = new_agent
 
             if self.room == self.goal_room:
                 reward = 1
@@ -349,7 +372,11 @@ class ToyMR(Environment):
                     assert (self.room.loc, new_agent) in self.doors
                     self.doors[(self.room.loc, new_agent)] = False
             elif cell_type == TRAP_CODE:
-                self.terminal = True
+                self.lives -= 1
+                if self.lives == 0:
+                    self.terminal = True
+                else:
+                    self.agent = self.enter_cell
 
         self.action_ticker += 1
 
@@ -358,6 +385,7 @@ class ToyMR(Environment):
         
         self.generate_new_state()
 
+        self.discovered_rooms.add(self.room)
         return start_state, action, reward, self.get_current_state(), self.is_current_state_terminal()
 
     def create_sectors(self):
@@ -438,17 +466,12 @@ class ToyMR(Environment):
 
         # create predicates
         preds = dict()
-        for i, (key_room, key_pos) in enumerate(self.keys):
-            pred = False
-            if key_room == room:
-                pred = s['key_%s' % i]
+        for i, key_neighbors in enumerate(self.key_neighbor_locs):
+            pred = room in [key_room for key_room, key_sector in key_neighbors] and s['key_%s' % i]
             preds['key_%s_in' % i] = pred
-        for i, (door_room, door_pos) in enumerate(self.doors):
-            pred = False
-            pred_key_door = False
-            if door_room == room:
-                pred = s['door_%s' % i]
-                pred_key_door = pred and num_keys >= 1
+        for i, door_neighbors in enumerate(self.door_neighbor_locs):
+            pred = room in [door_room for door_room, door_sector in door_neighbors] and s['door_%s' % i]
+            pred_key_door = pred and num_keys >= 1
             preds['door_%s_in' % i] = pred
             preds['door_key_%s_in' % i] = pred_key_door
 
@@ -462,24 +485,53 @@ class ToyMR(Environment):
 
         # create predicates
         preds = dict()
-        for i, (key_room, key_pos) in enumerate(self.keys):
-            pred = False
-            if key_room == room:
-                key_sector = self.sector_for_loc(key_room, key_pos)
-                pred = sector == key_sector and s['key_%s' % i]
+        for i, key_neighbors in enumerate(self.key_neighbor_locs):
+            pred = (room, sector) in key_neighbors and s['key_%s' % i]
             preds['key_%s_in' % i] = pred
-        for i, (door_room, door_pos) in enumerate(self.doors):
-            pred = False
-            pred_key_door = False
-            if door_room == room:
-                door_sector = self.sector_for_loc(door_room, door_pos)
-                pred = sector == door_sector and s['door_%s' % i]
-                pred_key_door = pred and num_keys >= 1
+        for i, door_neighbors in enumerate(self.door_neighbor_locs):
+            pred = (room, sector) in door_neighbors and s['door_%s' % i]
+            pred_key_door = pred and num_keys >= 1
             preds['door_%s_in' % i] = pred
             preds['door_key_%s_in' % i] = pred_key_door
 
         return tuple(sorted(preds.items()))
 
+    def neighbor_locs(self, room, loc):
+        neighbors = set()
+        for a in [0, 1, 2, 3]:
+            dx, dy = self._get_delta(a)
+            new_loc = (loc[0] + dx, loc[1] + dy)
+
+            # room transition checks
+            if (new_loc[0] < 0 or new_loc[0] >= self.room.size[0] or
+                new_loc[1] < 0 or new_loc[1] >= self.room.size[1]):
+                room_dx = 0
+                room_dy = 0
+
+                if new_loc[0] < 0:
+                    room_dx = -1
+                    new_loc = (self.room.size[0] - 1, new_loc[1])
+                elif new_loc[0] >= self.room.size[0]:
+                    room_dx = 1
+                    new_loc = (0, new_loc[1])
+                elif new_loc[1] < 0:
+                    room_dy = -1
+                    new_loc = (new_loc[0], self.room.size[1] - 1)
+                elif new_loc[1] >= self.room.size[1]:
+                    room_dy = 1
+                    new_loc = (new_loc[0], 0)
+
+                new_room = room[0] + room_dx, room[1] + room_dy
+            else:
+                new_room = room
+
+            if new_loc in self.rooms[new_room].walls:
+                continue
+
+            neighbor_loc = (new_room, self.sector_for_loc(new_room, new_loc))
+            neighbors.add(neighbor_loc)
+
+        return neighbors
 
     #def sector_abstraction(self, state):
     #    sector = -1
@@ -508,6 +560,8 @@ class ToyMR(Environment):
         self.num_keys = 0
         self.terminal = False
         self.action_ticker = 0
+        self.lives = self.max_lives
+        self.enter_cell = self.agent
 
         for room in self.rooms.values():
             room.reset()
@@ -531,6 +585,9 @@ class ToyMR(Environment):
         if new_agent in self.room.traps:
             return False
         return True
+
+    def get_discovered_rooms(self):
+        return self.discovered_rooms
 
     def render_screen(self):
         # clear screen
@@ -565,7 +622,10 @@ class ToyMR(Environment):
         # draw hud
         for i in range(self.num_keys):
             #self.screen.blit(self.key_image, (i * (self.hud_height + 2), 0))
-            self.draw_rect((i * (self.hud_height + 2), -1), KEY_COLOR)
+            self.draw_rect((i, -1), KEY_COLOR)
+        if self.max_lives > 1:
+            for i in range(self.lives):
+                self.draw_rect((self.room.size[0] - 1 - i, -1), LIVES_COLOR)
 
     def render_screen_generated(self, name, walls, keys, doors, traps, agents):
         # clear screen
@@ -738,7 +798,7 @@ class ToyMR(Environment):
 if __name__ == "__main__":
     map_file = 'mr_maps/full_mr_map.txt'
     abs_file = 'mr_maps/full_mr_map_abs.txt'
-    game = ToyMR(map_file, abstraction_file=abs_file, use_gui=False)
+    game = ToyMR(map_file, abstraction_file=abs_file, use_gui=False, max_lives=5)
 
     map_image_file = 'mr_maps/full_mr_map'
     game.save_map(map_image_file)
@@ -774,7 +834,7 @@ if __name__ == "__main__":
                     new_l1_state = game.oo_sector_abstraction(None)
                     if new_l1_state != l1_state:
                         l1_state = new_l1_state
-                        print l1_state, game.predicate_func(l1_state)
+                        print l1_state, game.sector_predicate_func(l1_state)
 
                     if game.is_current_state_terminal():
                         game.reset_environment()
