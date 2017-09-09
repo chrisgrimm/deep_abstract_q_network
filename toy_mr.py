@@ -116,11 +116,17 @@ class ToyMR(Environment):
 
         self.key_neighbor_locs = []
         self.door_neighbor_locs = []
-        if abstraction_file is not None:
+        if abstraction_file is None:
+            for i, (key_room, key_pos) in enumerate(self.keys):
+                self.key_neighbor_locs.append(key_room)
+            for i, (door_room, door_pos) in enumerate(self.doors):
+                self.door_neighbor_locs.append(door_room)
+        else:
             for i, (key_room, key_pos) in enumerate(self.keys):
                 self.key_neighbor_locs.append(self.neighbor_locs(key_room, key_pos))
             for i, (door_room, door_pos) in enumerate(self.doors):
                 self.door_neighbor_locs.append(self.neighbor_locs(door_room, door_pos))
+
 
         self.use_gui = use_gui
 
@@ -467,10 +473,10 @@ class ToyMR(Environment):
         # create predicates
         preds = dict()
         for i, key_neighbors in enumerate(self.key_neighbor_locs):
-            pred = room in [key_room for key_room, key_sector in key_neighbors] and s['key_%s' % i]
+            pred = room == key_neighbors and s['key_%s' % i]
             preds['key_%s_in' % i] = pred
         for i, door_neighbors in enumerate(self.door_neighbor_locs):
-            pred = room in [door_room for door_room, door_sector in door_neighbors] and s['door_%s' % i]
+            pred = room == door_neighbors and s['door_%s' % i]
             pred_key_door = pred and num_keys >= 1
             preds['door_%s_in' % i] = pred
             preds['door_key_%s_in' % i] = pred_key_door
@@ -796,19 +802,21 @@ class ToyMR(Environment):
 
 
 if __name__ == "__main__":
-    map_file = 'mr_maps/full_mr_map.txt'
-    abs_file = 'mr_maps/full_mr_map_abs.txt'
-    game = ToyMR(map_file, abstraction_file=abs_file, use_gui=False, max_lives=5)
+    map_file = 'mr_maps/four_rooms.txt' # 'mr_maps/full_mr_map.txt'
+    abs_file = None # 'mr_maps/full_mr_map_abs.txt'
+    game = ToyMR(map_file, abstraction_file=abs_file, use_gui=True, max_lives=5)
 
-    map_image_file = 'mr_maps/full_mr_map'
-    game.save_map(map_image_file)
-    map_image_file = 'mr_maps/full_mr_map_sectors'
-    game.save_map(map_image_file, draw_sectors=True)
+    # map_image_file = 'mr_maps/full_mr_map'
+    # game.save_map(map_image_file)
+    # map_image_file = 'mr_maps/full_mr_map_sectors'
+    # game.save_map(map_image_file, draw_sectors=True)
+    #
+    # pygame.image.save(game.screen, './' + 'example_input' + '.png')
 
-    pygame.image.save(game.screen, './' + 'example_input' + '.png')
-
-    l1_state = game.oo_sector_abstraction(None)
-    print l1_state, game.predicate_func(l1_state)
+    abs_func = game.oo_abstraction
+    pred_func = game.predicate_func
+    l1_state = abs_func(None)
+    print l1_state, pred_func(l1_state)
 
     running = True
     while running:
@@ -831,10 +839,10 @@ if __name__ == "__main__":
                 if action != -1:
                     game.perform_action(action)
 
-                    new_l1_state = game.oo_sector_abstraction(None)
+                    new_l1_state = abs_func(None)
                     if new_l1_state != l1_state:
                         l1_state = new_l1_state
-                        print l1_state, game.sector_predicate_func(l1_state)
+                        print l1_state, pred_func(l1_state)
 
                     if game.is_current_state_terminal():
                         game.reset_environment()

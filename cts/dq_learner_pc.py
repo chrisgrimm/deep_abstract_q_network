@@ -5,7 +5,7 @@ import tf_helpers as th
 from cts import cpp_cts
 from cts import pc_cts
 from replay_memory_pc import ReplayMemory
-from replay_memory_pc import MMCPathTracker2 as MMCPathTracker
+from replay_memory_pc import MMCPathTracker
 
 
 class DQLearner(interfaces.LearningAgent):
@@ -118,12 +118,13 @@ class DQLearner(interfaces.LearningAgent):
                        self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2})
         return loss
 
-    def run_learning_episode(self, environment, max_episode_steps=100000):
+    def run_learning_episode(self, environment, max_episode_steps=None):
         episode_steps = 0
         total_reward = 0
-        for steps in range(max_episode_steps):
+        while max_episode_steps is None or episode_steps < max_episode_steps:
 
             if environment.is_current_state_terminal():
+                self.mmc_tracker.flush()
                 break
 
             state = environment.get_current_state()

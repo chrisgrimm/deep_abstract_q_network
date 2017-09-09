@@ -18,7 +18,10 @@ from cts import atari_encoder
 from cts import toy_mr_encoder
 from embedding_dqn import mr_environment
 from embedding_dqn import oo_rmax_learner
-from embedding_dqn.abstraction_tools import mr_abstraction_no_sectors as mr_abs
+from embedding_dqn.abstraction_tools import hero_abstraction
+from embedding_dqn.abstraction_tools import mr_abstraction_ram as mr_abs
+from embedding_dqn.abstraction_tools import venture_abstraction
+from embedding_dqn.abstraction_tools import pitfall_abstraction
 
 # import daqn_clustering
 # import dq_learner_priors
@@ -38,19 +41,25 @@ game_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../roms')
 vis_update_interval = 10000
 
 
-def evaluate_agent_reward(steps, env, agent, epsilon):
+def evaluate_agent_reward(steps, env, agent, epsilon, max_episode_steps=4500, abs_reset_func=None):
     agent.run_vi(evaluation=True)
     num_explored_states = len(agent.states)
 
     env.terminate_on_end_life = False
     env.reset_environment()
+    if abs_reset_func is not None:
+        abs_reset_func()
     total_reward = 0
     episode_rewards = []
+    episode_steps = 0
     for i in tqdm.tqdm(range(steps)):
-        if env.is_current_state_terminal():
+        if episode_steps >= max_episode_steps or env.is_current_state_terminal():
             episode_rewards.append(total_reward)
             total_reward = 0
+            episode_steps = 0
             env.reset_environment()
+            if abs_reset_func is not None:
+                abs_reset_func()
         state = env.get_current_state()
         if np.random.uniform(0, 1) < epsilon:
             action = np.random.choice(env.get_actions_for_state(state))
@@ -59,11 +68,12 @@ def evaluate_agent_reward(steps, env, agent, epsilon):
 
         state, action, reward, next_state, is_terminal = env.perform_action(action)
         total_reward += reward
+        episode_steps += 1
     if not episode_rewards:
         episode_rewards.append(total_reward)
     return episode_rewards, num_explored_states
 
-def train(agent, env, test_epsilon, results_dir):
+def train(agent, env, test_epsilon, results_dir, abs_reset_func=None):
     env.terminate_on_end_life = False
 
     # open results file
@@ -78,6 +88,8 @@ def train(agent, env, test_epsilon, results_dir):
     best_eval_reward = - float('inf')
     while step_num < num_steps:
         env.reset_environment()
+        if abs_reset_func is not None:
+            abs_reset_func()
         if end_life_is_terminal:
             env.terminate_on_end_life = True
         start_time = datetime.datetime.now()
@@ -95,17 +107,17 @@ def train(agent, env, test_epsilon, results_dir):
         if steps_until_test <= 0:
             steps_until_test += test_interval
             print 'Evaluating network...'
-            episode_rewards, num_explored_states = evaluate_agent_reward(test_frames, env, agent, test_epsilon)
+            episode_rewards, num_explored_states = evaluate_agent_reward(test_frames, env, agent, test_epsilon, abs_reset_func=abs_reset_func)
             mean_reward = np.mean(episode_rewards)
 
             if mean_reward > best_eval_reward:
                 best_eval_reward = mean_reward
-                agent.save_network('%s/%s_best_net.ckpt' % (results_dir, game))
+                agent.save_network('%s/%s' % (results_dir, game))
 
             print 'Mean Reward:', mean_reward, 'Best:', best_eval_reward
 
             if getattr(env, 'get_discovered_rooms', None):
-                results_file.write('Step: %d -- Mean reward: %.2f -- Num Explored: %s -- Num Rooms: %s\n' % (step_num, mean_reward, num_explored_states, len(env.get_discovered_rooms())))
+                results_file.write('Step: %d -- Mean reward: %.2f -- Num Explored: %s -- Num Rooms: %s -- Rooms: %s\n' % (step_num, mean_reward, num_explored_states, len(env.get_discovered_rooms()), env.get_discovered_rooms()))
             else:
                 results_file.write('Step: %d -- Mean reward: %.2f -- Num Explored: %s\n' % (step_num, mean_reward, num_explored_states))
             results_file.flush()
@@ -189,34 +201,48 @@ def train_hadooqn(env, num_actions):
 
     # frame_history = 1
     # abs_size = 33
-
-    # abs_func = env.oo_sector_abstraction
-    # pred_func = env.sector_predicate_func
+    # rmax = 1
+    #
+    # # abs_func = env.oo_sector_abstraction
+    # # pred_func = env.sector_predicate_func
+    #
+    # abs_func = env.oo_abstraction
+    # pred_func = env.predicate_func
     # enc_func = None
     # cts_size = None
     # results_dir = './results/hadooqn/%s_sectors' % game
-
-    # abs_func = env.oo_abstraction
-    # pred_func = env.predicate_func
-    # enc_func = toy_mr_encoder.encode_toy_mr_state
-    # cts_size = (11, 12, 6)
-    # results_dir = './results/hadooqn/%s_cts_test' % game
+    #
+    # # abs_func = env.oo_abstraction
+    # # pred_func = env.predicate_func
+    # # enc_func = toy_mr_encoder.encode_toy_mr_state
+    # # cts_size = (11, 12, 6)
+    # # results_dir = './results/hadooqn/%s_cts' % game
 
     frame_history = 4
-    abs = mr_abs.MRAbstraction()
-    abs.set_env(env)
+
+    abs = mr_abs.MRAbstraction(env, use_sectors=True)
+    rmax = 1000
+
+    # abs = venture_abstraction.VentureAbstraction(env, use_sectors=True)
+    # rmax = 200
+
+    # abs = hero_abstraction.HeroAbstraction(env, use_sectors=True)
+    # rmax = 1000
+
     abs_func = abs.oo_abstraction_function
     pred_func = abs.predicate_func
+    abs_reset_func = abs.reset
     abs_size = 24 + 10
-    enc_func = atari_encoder.encode_state
+    enc_func = None # atari_encoder.encode_state
     cts_size = (42, 42, 8)
-    results_dir = './results/hadooqn/%s_cts' % game
+    # env.abstraction = abs
+    results_dir = './results/hadooqn/%s_sectors_fixed_abstraction' % game
 
-    with tf.device('/gpu:1'):
-        agent = oo_rmax_learner.OORMaxLearner(abs_size, env, abs_func, pred_func, frame_history=frame_history,
-                                              state_encoder=enc_func, cts_size=cts_size, bonus_beta=0.05,)
+    with tf.device('/gpu:0'):
+        agent = oo_rmax_learner.OORMaxLearner(abs_size, env, abs_func, pred_func, abs_reset_func, frame_history=frame_history,
+                                              state_encoder=enc_func, cts_size=cts_size, bonus_beta=0.05, rmax=rmax)
 
-    train(agent, env, test_epsilon, results_dir)
+    train(agent, env, test_epsilon, results_dir, abs_reset_func)
 
 def train_double_dqn(env, num_actions):
     results_dir = './results/dqn/%s' % game
@@ -232,7 +258,10 @@ def train_double_dqn(env, num_actions):
 
 def setup_atari_env():
     # create Atari environment
-    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin')
+    max_num_frames = 500000
+    if game == 'pitfall':
+        max_num_frames = 72000
+    env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', use_gui=True, max_num_frames=max_num_frames)
     num_actions = len(env.ale.getMinimalActionSet())
     return env, num_actions
 
@@ -251,13 +280,18 @@ def setup_wind_tunnel_env():
 #     num_actions = len(env.get_actions_for_state(None))
 #     return env, num_actions
 
+def setup_four_rooms_env():
+    env = toy_mr.ToyMR('../mr_maps/four_rooms.txt', max_num_actions=10000)
+    num_actions = len(env.get_actions_for_state(None))
+    return env, num_actions
+
 def setup_toy_mr_env():
-    env = toy_mr.ToyMR('../mr_maps/full_mr_map.txt', abstraction_file='../mr_maps/full_mr_map_abs.txt', use_gui=True)
+    env = toy_mr.ToyMR('../mr_maps/full_mr_map.txt', abstraction_file='../mr_maps/full_mr_map_abs.txt')
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
 def setup_mr_env(frame_history_length=1):
-    env = mr_environment.MREnvironment(game_dir + '/' + 'montezuma_revenge' + '.bin', frame_history_length=frame_history_length, use_gui=True, repeat_action_probability=0.25)
+    env = mr_environment.MREnvironment(game_dir + '/' + 'montezuma_revenge' + '.bin', frame_history_length=frame_history_length, use_gui=True)
     num_actions = len(env.ale.getMinimalActionSet())
     return env, num_actions
 
@@ -274,6 +308,20 @@ def setup_mr_env(frame_history_length=1):
 # end_life_is_terminal = False
 # train_hadooqn(*setup_toy_mr_env())
 
+# game = 'four_rooms'
+# end_life_is_terminal = False
+# train_hadooqn(*setup_four_rooms_env())
+
 game = 'montezuma_revenge'
-end_life_is_terminal = False
+end_life_is_terminal = True
+# end_life_is_terminal = False
 train_hadooqn(*setup_mr_env(frame_history_length=4))
+
+# game = 'venture'
+# # end_life_is_terminal = True
+# end_life_is_terminal = False
+# train_hadooqn(*setup_atari_env())
+
+# game = 'hero'
+# end_life_is_terminal = True
+# train_hadooqn(*setup_atari_env())

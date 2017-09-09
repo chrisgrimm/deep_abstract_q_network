@@ -201,12 +201,19 @@ def setup_toy_mr_env():
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
+def setup_four_rooms_env():
+    env = toy_mr.ToyMR('./mr_maps/four_rooms.txt', max_num_actions=10000)
+    num_actions = len(env.get_actions_for_state(None))
+    return env, num_actions
+
 
 # game = 'freeway'
 # train_dqn(*setup_atari_env())
 # train_dqn(*setup_coin_env())
-game = 'toy_mr'
-train_double_dqn(*setup_toy_mr_env())
+# game = 'toy_mr'
+# train_double_dqn(*setup_toy_mr_env())
+game = 'four_rooms'
+train_double_dqn(*setup_four_rooms_env())
 # train_daqn(*setup_coin_env())
 # train_daqn_priors(*setup_coin_env())
 # train_dqn_priors(*setup_coin_env())

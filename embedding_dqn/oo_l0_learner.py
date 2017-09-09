@@ -6,6 +6,7 @@ import oo_rmax_learner
 from oo_replay_memory import MMCPathTracker
 from oo_replay_memory import MMCPathTrackerExplore
 from oo_replay_memory import ReplayMemory
+from collections import deque
 
 
 def construct_root_network(input, frame_history):
@@ -158,7 +159,7 @@ def construct_q_network_weights_only_final(input, dqn_numbers, dqn_max_number, f
     with tf.variable_scope('fc1'):
         fc1 = th.fully_connected(c3, 512, tf.nn.relu)
     with tf.variable_scope('fc2'):
-        q_values = th.fully_connected_weights_2(fc1, dqn_numbers, dqn_max_number, num_actions, lambda x: x)
+        q_values = th.fully_connected_weights(fc1, dqn_numbers, dqn_max_number, num_actions, lambda x: x)
         # q_values_explore = th.fully_connected_weights_2(fc1, dqn_numbers_explore, dqn_max_number, num_actions, lambda x: x)
     return q_values, None
 
@@ -338,6 +339,7 @@ class MultiHeadedDQLearner():
         self.encoding_func = encoding_func
         self.bonus_beta = bonus_beta
         self.reward_mult = 1. # (10 * self.bonus_beta)/(1-gamma)
+        self.n_hat_tracker = dict()
 
         ####################
         ## Keeping track of progress of actions
@@ -385,6 +387,7 @@ class MultiHeadedDQLearner():
         dqn_tuple = (initial_l1_state, goal_l1_state)
         if l1_action not in self.epsilon:
             self.epsilon[l1_action] = 1.0
+            self.n_hat_tracker[l1_action] = deque(maxlen=10000)
 
         for steps in range(max_episode_steps):
             if environment.is_current_state_terminal():
@@ -432,6 +435,7 @@ class MultiHeadedDQLearner():
                 enc_s = self.encoding_func(environment)
                 n_hat = cts.psuedo_count_for_image(enc_s)
                 R_plus = (1 - is_terminal) * (self.bonus_beta * np.power(n_hat + 0.01, -0.5))
+                self.n_hat_tracker[l1_action].append(n_hat)
 
             # R_plus = (self.reward_mult * np.sign(reward)) + R_plus
             R = (self.reward_mult * np.sign(reward))

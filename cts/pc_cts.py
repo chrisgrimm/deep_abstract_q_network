@@ -6,7 +6,7 @@ def L_shaped_context(image, y, x):
     """This grabs the L-shaped context around a given pixel.
 
     Out-of-bounds values are set to 0xFFFFFFFF."""
-    context = [0xFFFFFFFF] * 4
+    context = [0] * 4
     if x > 0:
         context[3] = image[y][x - 1]
 
@@ -25,15 +25,14 @@ class LocationDependentDensityModel(object):
     pixel location.
     """
 
-    def __init__(self, frame_shape, to_symbol_func, context_func, alphabet=None):
+    def __init__(self, frame_shape, context_func, alphabet=None):
         self.models = np.zeros(frame_shape[0:2], dtype=object)
 
         for y in range(frame_shape[0]):
             for x in range(frame_shape[1]):
-                self.models[y, x] = model.CTS(context_length=4, alphabet=alphabet)
+                self.models[y, x] = model.CTS(context_length=4, alphabet=alphabet, max_alphabet_size=8)
 
         self.context_func = context_func
-        self.to_symbol_func = to_symbol_func
 
     def update(self, frame):
         total_log_probability = 0.0

@@ -18,7 +18,7 @@ class L1ExploreAction(object):
         self.dqn_number = dqn_number
 
     def __str__(self):
-        return '%s, %s EXPLORE' % (self.key, self.val)
+        return '%s: %s EXPLORE' % (self.key, self.val)
 
     def get_uid(self):
         return (self.key, self.val) + self.pred + ('explore',)
@@ -133,7 +133,7 @@ class MovingAverageTable(object):
         if self.moving_avg_len is None:
             if key not in self.terminal_table:
                 self.terminal_table[key] = 0
-            self.terminal_table[key] += 1
+            self.terminal_table[key] += terminal
 
             if key not in self.transition_table:
                 self.transition_table[key] = 0
@@ -162,7 +162,10 @@ class MovingAverageTable(object):
     def get_r(self, s, a, sp):
         diff = make_diff(s, sp)
 
-        return np.mean(self.reward_table[(diff, a)])
+        if self.moving_avg_len is None:
+            return self.reward_table[(diff, a)] / self.transition_table[(diff, a)]
+        else:
+            return np.mean(self.reward_table[(diff, a)])
 
     def get_prob_terminal(self, s, a, sp):
         diff = make_diff(s, sp)
@@ -176,7 +179,7 @@ class MovingAverageTable(object):
 class OORMaxLearner(interfaces.LearningAgent):
     def __init__(self, abs_size, env, abs_func, pred_func, N=1000, max_VI_iterations=100, value_update_freq=1000, VI_delta=0.01, gamma=0.99, rmax=1,
                  max_num_abstract_states=10, frame_history=1, restore_file=None, error_clip=1,
-                 state_encoder=None, bonus_beta=0.05, cts_size=None):
+                 state_encoder=None, bonus_beta=0.05, cts_size=None, use_min_psuedo_count=False):
         self.env = env
         self.abs_size = abs_size
         self.abs_func = abs_func
@@ -210,27 +213,30 @@ class OORMaxLearner(interfaces.LearningAgent):
         self.current_dqn_number = 1
 
         self.cts = dict()
-        self.global_cts = cpp_cts.CPP_CTS(*cts_size)
+        if cts_size is not None:
+            self.global_cts = cpp_cts.CPP_CTS(*cts_size)
         self.encoding_func = state_encoder
         self.bonus_beta = bonus_beta
         self.cts_size = cts_size
         self.using_global_epsilon = False # state_encoder is not None
+        self.use_min_psuedo_count = use_min_psuedo_count
 
         if restore_file is None:
             self.create_new_state(self.abs_func(self.env.get_current_state()))
         else:
-            with open('./transition_table.pickle', 'r') as f:
+            with open(restore_file + '_transition_table.pickle', 'r') as f:
                 self.transition_table = dill.load(f)
-            with open('./states.pickle', 'r') as f:
+            with open(restore_file + '_states.pickle', 'r') as f:
                 self.states = dill.load(f)
-            with open('./actions.pickle', 'r') as f:
+            with open(restore_file + '_actions.pickle', 'r') as f:
                 self.actions = dill.load(f)
-            with open('./actions_for_pia.pickle', 'r') as f:
+            with open(restore_file + '_actions_for_pia.pickle', 'r') as f:
                 self.actions_for_pia = dill.load(f)
-            with open('./explore_for_pia.pickle', 'r') as f:
+            with open(restore_file + '_explore_for_pia.pickle', 'r') as f:
                 self.explore_for_pia = dill.load(f)
             self.populate_imagined_states()
         self.run_vi()
+        # self.run_vi(evaluation=True)
 
     def create_new_state(self, state):
         self.states.add(state)
@@ -279,6 +285,7 @@ class OORMaxLearner(interfaces.LearningAgent):
 
         self.populate_imagined_states()
         self.run_vi()
+        # self.run_vi(evaluation=True)
 
         print 'Found new action: %s' % (new_action,)
 
@@ -305,7 +312,8 @@ class OORMaxLearner(interfaces.LearningAgent):
             actions_for_state[s] = actions
             for a in actions:
                 transitions_sa = []
-                if a in self.transition_table.a_count and \
+                if type(a) is not L1ExploreAction and \
+                        a in self.transition_table.a_count and \
                         (self.transition_table.a_count[a] >= self.transition_table.num_conf or evaluation) and \
                                 a in self.transition_table.valid_transitions:
                     Z = np.sum(
@@ -349,11 +357,13 @@ class OORMaxLearner(interfaces.LearningAgent):
         #     return max(0, 1./len(self.transition_table.actions) - prop)
         return self.transition_table.get_r(s, a, sp)
 
-    def run_learning_episode(self, environment):
+    def run_learning_episode(self, environment, max_episode_steps=None):
         total_episode_steps = 0
         total_reward = 0
 
-        while not self.env.is_current_state_terminal():
+        # evaluation_episode = bool(np.random.randint(0, 2))
+
+        while not self.env.is_current_state_terminal() and (max_episode_steps is None or total_episode_steps < max_episode_steps):
 
             s = self.abs_func(self.env.get_current_state())
 
@@ -369,8 +379,9 @@ class OORMaxLearner(interfaces.LearningAgent):
                 self.create_new_state(s)
                 self.populate_imagined_states()
                 self.run_vi()
+                # self.run_vi(evaluation=True)
 
-            a = self.get_l1_action(s)
+            a = self.get_l1_action(s) #, evaluation=evaluation_episode)
 
             if self.using_global_epsilon:
                 if a.dqn_number not in self.l0_learner.epsilon:
@@ -432,14 +443,19 @@ class OORMaxLearner(interfaces.LearningAgent):
                     explore_action = self.explore_for_pia[pia]
                     explore_action.count += 1
                     # remove the explore action for this attribute if its been explored enough
+                    if self.use_min_psuedo_count:
+                        explore_check = min(self.l0_learner.n_hat_tracker[explore_action]) > 5
+                    else:
+                        explore_check = explore_action.count >= self.transition_table.num_conf
                     if explore_action in self.actions_for_pia[pia] and \
-                            explore_action.count >= self.transition_table.num_conf and \
+                            explore_check and \
                             len(self.get_all_actions_for_state(s)) > 1:
                         self.actions_for_pia[pia].remove(explore_action)
                         self.actions.remove(explore_action)
                         changed = True
                 if changed:
                     self.run_vi()
+                    # self.run_vi(evaluation=True)
 
             total_episode_steps += episode_steps
             total_reward += R
@@ -454,6 +470,7 @@ class OORMaxLearner(interfaces.LearningAgent):
             # perform vi for both evaluation values and regular values.
             if self.value_update_counter % self.value_update_freq == 0:
                 self.run_vi()
+                # self.run_vi(evaluation=True)
             self.value_update_counter += 1
 
         return total_episode_steps, total_reward
@@ -508,5 +525,15 @@ class OORMaxLearner(interfaces.LearningAgent):
             return self.l0_learner.get_action(state, l1_action.dqn_number)
 
     def save_network(self, file_name):
-        pass
-        # self.l0_learner.save_network(file_name)
+        with open(file_name + '_transition_table.pickle', 'w') as f:
+            dill.dump(self.transition_table, f)
+        with open(file_name + '_states.pickle', 'w') as f:
+            dill.dump(self.states, f)
+        with open(file_name + '_actions.pickle', 'w') as f:
+            dill.dump(self.actions, f)
+        with open(file_name + '_actions_for_pia.pickle', 'w') as f:
+            dill.dump(self.actions_for_pia, f)
+        with open(file_name + '_explore_for_pia.pickle', 'w') as f:
+            dill.dump(self.explore_for_pia, f)
+
+        self.l0_learner.save_network(file_name)

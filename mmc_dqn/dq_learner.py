@@ -101,7 +101,8 @@ class DQLearner(interfaces.LearningAgent):
     def run_learning_episode(self, environment, max_episode_steps=100000):
         episode_steps = 0
         total_reward = 0
-        for steps in range(max_episode_steps):
+        while max_episode_steps is None or episode_steps < max_episode_steps:
+
             if environment.is_current_state_terminal():
                 self.mmc_tracker.flush()
                 break

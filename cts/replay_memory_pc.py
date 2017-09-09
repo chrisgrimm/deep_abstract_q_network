@@ -28,56 +28,6 @@ class MMCPathTracker(object):
     def _get_mmc_reward_for_slice(self, slice):
         return np.sum(slice * self.mmc_reward_array)
 
-    def _push(self, S1, DQNNumber, A, R, S2, T):
-        self.path[self.path_end_index] = R
-        self.replay_path.append((S1, DQNNumber, A, R, S2, T))
-        self.path_end_index = (self.path_end_index + 1) % self.max_path_length
-
-    def _pop(self):
-        (S1, DQNNumber, A, R, S2, T) = self.replay_path.popleft()
-        MMCR = self._get_mmc_reward_for_slice(self._get_path_slice())
-        self.replay_memory.append(S1, DQNNumber, A, R, MMCR, S2, T)
-        self.path_start_index = (self.path_start_index + 1) % self.max_path_length
-
-    def append(self, S1, DQNNumber, A, R, S2, T):
-        if len(self.replay_path) == self.max_path_length:
-            self._pop()
-        self._push(S1, DQNNumber, A, R, S2, T)
-
-    def flush(self):
-        for i in xrange(len(self.replay_path)):
-            self._pop()
-        self.path.fill(0)
-        self.path_start_index = 0
-        self.path_end_index = 0
-
-class MMCPathTracker2(object):
-
-    def __init__(self, replay_memory, max_path_length, gamma):
-        self.replay_memory = replay_memory
-        self.max_path_length = max_path_length
-        self.gamma = gamma
-        self.replay_path = deque()
-        self.path = np.zeros(shape=[max_path_length], dtype=np.float32)
-        self.mmc_reward_array = np.ones(shape=[max_path_length], dtype=np.float32)
-        for i in range(max_path_length):
-            self.mmc_reward_array[i] = self.gamma ** i
-        self.path_start_index = 0
-        self.path_end_index = 0
-
-    def _get_path_slice(self):
-        if self.path_start_index < self.path_end_index:
-            path_slice = self.path[self.path_start_index:self.path_end_index]
-        else:
-            p1 = self.path[self.path_start_index:]
-            p2 = self.path[:self.path_end_index]
-            path_slice = np.concatenate([p1, p2])
-        path_slice = np.pad(path_slice, (0, len(self.mmc_reward_array) - len(path_slice)), 'constant')
-        return path_slice
-
-    def _get_mmc_reward_for_slice(self, slice):
-        return np.sum(slice * self.mmc_reward_array)
-
     def _push(self, S1, A, R, S2, T):
         self.path[self.path_end_index] = R
         self.replay_path.append((S1, A, R, S2, T))

@@ -17,17 +17,21 @@ global_object_locs = [  # stored as (byte, bit)
     (8, 3),  # Door L Room 17
 ]
 
-# key_locations = [  # (room, sector) of all keys. ORDERED AS ABOVE
-#     (1, (0, 1)),
-#     (7, (0, 1)),
-#     (8, ())
-# ]
-#
-# door_locations = [  # (room, sector) of all doors. ORDERED AS ABOVE
-#     (1, (2, 2)),
-#     (1, (0, 2)),
-#
-# ]
+key_locations = [  # (room, sector) of all keys. ORDERED AS ABOVE
+    (1, (0, 1)),
+    (7, (2, 2)),
+    (8, (1, 2)),
+    (14, (1, 1)),
+]
+
+door_locations = [  # (room, sector) of all doors. ORDERED AS ABOVE
+    (1, (2, 2)),
+    (1, (0, 2)),
+    (5, (1, 0)),
+    (5, (1, 0)),
+    (17, (2, 2)),
+    (17, (0, 2)),
+]
 
 
 def get_bit(a, i):
@@ -36,24 +40,26 @@ def get_bit(a, i):
 
 class MRAbstraction(object):
 
-    def __init__(self, use_sectors=True):
-        self.global_state = [0] * len(global_object_locs)
-        self.env = None
-        self.current_room = 1
+    def __init__(self, env, use_sectors=True):
+        self.env = env
         self.use_sectors = use_sectors
+
+        self.global_state = [0] * len(global_object_locs)
+        self.current_room = -1
         self.agent_sector = (1, 2)
         self.num_keys = 0
+
         self.old_should_check = True
         self.update_room_value = None
         self.updated_room = False
         self.old_RAM = None
 
-    def reset(self, ram):
-        self.old_should_check = True
-        self.update_state(ram, hard=True)
-
-    def set_env(self, env):
-        self.env = env
+    def reset(self):
+        self.global_state = [0] * len(global_object_locs)
+        self.current_room = -1
+        self.agent_sector = (1, 2)
+        self.num_keys = 0
+        self.old_should_check = False
 
     def update_num_keys(self, ram):
         num_keys = 0
@@ -89,24 +95,25 @@ class MRAbstraction(object):
         pos_x, pos_y = self.get_agent_position(ram)
         self.agent_sector = np.clip(int(3 * pos_x), 0, 2), np.clip(int(3 * pos_y), 0, 2)
 
-    def update_agent_sector_water_room(self, ram):
-        pos_x, pos_y = self.get_agent_position(ram)
-        sectors_room_0 = [(0, 0.2517), (0.2517, 0.7546), (0.7546, 0.912), (0.912, 1.0)]
-        sectors_room_7 = [(0, 0.09245), (0.09245, 0.25496), (0.25496, 0.7516), (0.7516, 1.0)]
-        sectors_room_12 = [(0, 0.24834), (0.24834, 0.40725), (0.40725, 0.5993), (0.5993, 0.75826), (0.75826, 1.0)]
-        room_dict = {0: sectors_room_0, 7: sectors_room_7, 12: sectors_room_12}
-        active_room = room_dict[self.current_room]
-        for sector, (a, b) in enumerate(active_room):
-            if a <= pos_x <= b:
-                # HAX
-                self.agent_sector = sector % 3, sector/3
+    # def update_agent_sector_water_room(self, ram):
+    #     pos_x, pos_y = self.get_agent_position(ram)
+    #     sectors_room_0 = [(0, 0.2517), (0.2517, 0.7546), (0.7546, 0.912), (0.912, 1.0)]
+    #     sectors_room_7 = [(0, 0.09245), (0.09245, 0.25496), (0.25496, 0.7516), (0.7516, 1.0)]
+    #     sectors_room_12 = [(0, 0.24834), (0.24834, 0.40725), (0.40725, 0.5993), (0.5993, 0.75826), (0.75826, 1.0)]
+    #     room_dict = {0: sectors_room_0, 7: sectors_room_7, 12: sectors_room_12}
+    #     active_room = room_dict[self.current_room]
+    #     for sector, (a, b) in enumerate(active_room):
+    #         if a <= pos_x <= b:
+    #             # HAX
+    #             self.agent_sector = sector % 3, sector/3
 
     def update_agent_sector(self, ram, hard=False):
         if hard or self.should_perform_sector_check(ram):
-            if self.current_room in [0, 7, 12]:
-                self.update_agent_sector_water_room(ram)
-            else:
-                self.update_agent_sector_normal_room(ram)
+            self.update_agent_sector_normal_room(ram)
+            # if self.current_room in [0, 7, 12]:
+            #     self.update_agent_sector_water_room(ram)
+            # else:
+            #     self.update_agent_sector_normal_room(ram)
 
     def update_current_room(self, ram, hard=False):
         if hard:
@@ -124,11 +131,12 @@ class MRAbstraction(object):
         else:
             self.update_room_value = None
 
-    def update_state(self, ram, hard=False):
-        self.update_global_state(ram)
-        self.update_current_room(ram, hard=hard)
-        self.update_agent_sector(ram, hard=hard)
-        self.update_num_keys(ram)
+    def update_state(self, ram):
+        if self.should_perform_sector_check(ram):
+            self.update_global_state(ram)
+            self.update_current_room(ram, hard=self.current_room == -1)
+            self.update_agent_sector(ram)
+            self.update_num_keys(ram)
 
     def get_abstract_state(self):
         return MRAbstractState(self.current_room, self.agent_sector if self.use_sectors else None, self.num_keys, self.global_state)
@@ -165,17 +173,15 @@ class MRAbstraction(object):
 
         # create predicates
         preds = dict()
-        for i, (key_room, key_pos) in enumerate(self.keys):
+        for i, (key_room, key_sector) in enumerate(key_locations):
             pred = False
             if key_room == room:
-                key_sector = self.sector_for_loc(key_room, key_pos)
                 pred = sector == key_sector and s['key_%s' % i]
             preds['key_%s_in' % i] = pred
-        for i, (door_room, door_pos) in enumerate(self.doors):
+        for i, (door_room, door_sector) in enumerate(door_locations):
             pred = False
             pred_key_door = False
             if door_room == room:
-                door_sector = self.sector_for_loc(door_room, door_pos)
                 pred = sector == door_sector and s['door_%s' % i]
                 pred_key_door = pred and num_keys >= 1
             preds['door_%s_in' % i] = pred
