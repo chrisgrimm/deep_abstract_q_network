@@ -10,14 +10,16 @@ class DQLearner(interfaces.LearningAgent):
     def __init__(self, dqn, num_actions, max_path_length=1000, beta=0.5, gamma=0.99, learning_rate=0.00025, replay_start_size=50000,
                  epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
+                 max_mmc_path_length=1000, mmc_beta=0.1,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True):
         self.dqn = dqn
-        self.beta = beta
-        self.max_path_length = max_path_length
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
+        config.allow_soft_placement = True
         self.sess = tf.Session(config=config)
         self.inp_actions = tf.placeholder(tf.float32, [None, num_actions])
+        self.max_mmc_path_length = max_mmc_path_length
+        self.mmc_beta = mmc_beta
         inp_shape = [None] + list(self.dqn.get_input_shape()) + [frame_history]
         inp_dtype = self.dqn.get_input_dtype()
         assert type(inp_dtype) is str
@@ -30,7 +32,7 @@ class DQLearner(interfaces.LearningAgent):
         self.inp_sp_mask = tf.placeholder(inp_dtype, [None, frame_history])
         self.gamma = gamma
         with tf.variable_scope('online'):
-            mask_shape = [-1] + [1]*len(self.dqn.get_input_shape()) + [frame_history]
+            mask_shape = [-1] + [1] * len(self.dqn.get_input_shape()) + [frame_history]
             mask = tf.reshape(self.inp_mask, mask_shape)
             masked_input = self.inp_frames * mask
             self.q_online = self.dqn.construct_q_network(masked_input)
@@ -48,14 +50,13 @@ class DQLearner(interfaces.LearningAgent):
         else:
             self.maxQ = tf.reduce_max(self.q_target, reduction_indices=1)
 
-        self.r = tf.sign(self.inp_reward)
+        self.r = self.inp_reward
         use_backup = tf.cast(tf.logical_not(self.inp_terminated), dtype=tf.float32)
         self.y = self.r + use_backup * gamma * self.maxQ
         self.delta_dqn = tf.reduce_sum(self.inp_actions * self.q_online, reduction_indices=1) - self.y
         self.delta_mmc = (self.inp_mmc_reward - self.y)
-        self.delta = (1. - self.beta)*self.delta_dqn + self.beta*self.delta_mmc
-        self.error = tf.select(tf.abs(self.delta) < error_clip, 0.5 * tf.square(self.delta),
-                               error_clip * tf.abs(self.delta))
+        self.delta = (1. - self.mmc_beta)*self.delta_dqn + self.mmc_beta*self.delta_mmc
+        self.error = tf.where(tf.abs(self.delta) < error_clip, 0.5 * tf.square(self.delta), error_clip * tf.abs(self.delta))
         self.loss = tf.reduce_sum(self.error)
         self.g = tf.gradients(self.loss, self.q_online)
         optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=0.95, centered=True, epsilon=0.01)
@@ -64,7 +65,8 @@ class DQLearner(interfaces.LearningAgent):
         self.saver = tf.train.Saver(var_list=th.get_vars('online'))
 
         self.replay_buffer = ReplayMemory(self.dqn.get_input_shape(), self.dqn.get_input_dtype(), replay_memory_size, frame_history)
-        self.mmc_tracker = MMCPathTracker(self.replay_buffer, self.max_path_length, self.gamma)
+        self.mmc_tracker = MMCPathTracker(self.replay_buffer, self.max_mmc_path_length, self.gamma)
+
         self.frame_history = frame_history
         self.replay_start_size = replay_start_size
         self.epsilon = epsilon_start
@@ -118,7 +120,8 @@ class DQLearner(interfaces.LearningAgent):
 
             state, action, reward, next_state, is_terminal = environment.perform_action(action)
             total_reward += reward
-            self.mmc_tracker.append(state[-1], action, reward, next_state[-1], is_terminal)
+
+            self.mmc_tracker.append(state[-1], action, np.sign(reward), next_state[-1], is_terminal)
             if (self.replay_buffer.size() > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
                 loss = self.update_q_values()
             if (self.action_ticker - self.replay_start_size) % self.target_copy_freq == 0:

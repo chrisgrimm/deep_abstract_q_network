@@ -1,5 +1,6 @@
 import datetime
 
+import tensorflow as tf
 import numpy as np
 import tqdm
 import os
@@ -10,14 +11,10 @@ import coin_game
 import dq_learner
 import toy_mr
 import wind_tunnel
-import daqn
-import tabular_dqn
-import tabular_coin_game
-from embedding_dqn.abstraction_tools import montezumas_abstraction as ma
 
 # import daqn_clustering
 # import dq_learner_priors
-from embedding_dqn import rmax_learner
+from embedding_dqn import rmax_learner, mr_environment
 
 num_steps = 50000000
 test_interval = 250000
@@ -87,35 +84,26 @@ def train(agent, env, test_epsilon, results_dir):
                 agent.save_network('%s/%s_best_net.ckpt' % (results_dir, game))
 
             print 'Mean Reward:', mean_reward, 'Best:', best_eval_reward
-            results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
+            if getattr(env, 'get_discovered_rooms', None):
+                results_file.write('Step: %d -- Mean reward: %.2f -- Num Rooms: %s -- Rooms: %s\n' % (step_num, mean_reward, len(env.get_discovered_rooms()), env.get_discovered_rooms()))
+            else:
+                results_file.write('Step: %d -- Mean reward: %.2f\n' % (step_num, mean_reward))
             results_file.flush()
 
 
-
-def train_rmax_daqn(env, num_actions):
-    results_dir = './results/rmax_daqn/%s_fixed_terminal' % game
-
-    training_epsilon = 0.01
-    test_epsilon = 0.001
-
-    frame_history = 4
-    #dqn = atari_dqn.AtariDQN(frame_history, num_actions)
-    #abs_vec_func = lambda (x, y, door, key): [float(x), float(y), 1.0 if door else -1.0, 1.0 if key else -1.0]
-    abs_vec_func = ma.montezuma_abstraction_vector
-    abs_size = 35
-    agent = rmax_learner.RMaxLearner(abs_size, env, abs_vec_func, env.abstraction, frame_history=frame_history)
-
-    train(agent, env, test_epsilon, results_dir)
-
 def train_double_dqn(env, num_actions):
-    results_dir = './results/dqn/%s' % game
+    results_dir = './results/dqn/%s_single_life_part_2' % game
 
     training_epsilon = 0.01
     test_epsilon = 0.001
 
+    # frame_history = 1
     frame_history = 4
+
     dqn = atari_dqn.AtariDQN(frame_history, num_actions)
-    agent = dq_learner.DQLearner(dqn, num_actions, beta=1.0, frame_history=frame_history, epsilon_end=training_epsilon)
+    with tf.device('/gpu:0'):
+        agent = dq_learner.DQLearner(dqn, num_actions, beta=1.0, frame_history=frame_history, epsilon_end=training_epsilon,
+                                     restore_network_file='results/dqn/mr_single_life/mr_best_net')
     train(agent, env, test_epsilon, results_dir)
 
 def setup_atari_env():
@@ -134,23 +122,30 @@ def setup_wind_tunnel_env():
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
-def setup_tabular_env():
-    env = tabular_coin_game.TabularCoinGame()
+def setup_toy_mr_env():
+    env = toy_mr.ToyMR('../mr_maps/full_mr_map.txt')
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
-def setup_toy_mr_env():
-    env = toy_mr.ToyMR('../mr_maps/four_rooms.txt')
+def setup_four_rooms_env():
+    env = toy_mr.ToyMR('../mr_maps/four_rooms.txt', max_num_actions=10000)
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
 def setup_mr_env():
     from embedding_dqn.abstraction_tools import montezumas_abstraction as ma
-    env = atari.AtariEnvironment(game_dir + '/' + 'montezuma_revenge' + '.bin', abstraction_tree=ma.abstraction_tree)
+    env = mr_environment.MREnvironment(game_dir + '/' + 'montezuma_revenge' + '.bin', use_gui=True, repeat_action_probability=0.25, single_life=True)
     num_actions = len(env.ale.getMinimalActionSet())
     return env, num_actions
+
 
 
 game = 'mr'
 #train_rmax_daqn(*setup_mr_env())
 train_double_dqn(*setup_mr_env())
+
+# game = 'four_rooms'
+# train_double_dqn(*setup_four_rooms_env())
+
+# game = 'toy_mr'
+# train_double_dqn(*setup_toy_mr_env())

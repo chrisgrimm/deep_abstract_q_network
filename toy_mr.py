@@ -391,7 +391,7 @@ class ToyMR(Environment):
         
         self.generate_new_state()
 
-        self.discovered_rooms.add(self.room)
+        self.discovered_rooms.add(self.room.loc)
         return start_state, action, reward, self.get_current_state(), self.is_current_state_terminal()
 
     def create_sectors(self):
