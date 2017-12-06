@@ -22,7 +22,7 @@ from embedding_dqn import mr_environment
 num_steps = 50000000
 test_interval = 250000
 test_frames = 125000
-game_dir = '../roms'
+game_dir = './roms'
 
 vis_update_interval = 10000
 
@@ -138,7 +138,7 @@ def train_double_dqn(env, num_actions):
 def setup_atari_env():
     # create Atari environment
     # env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', use_gui=True, repeat_action_probability=0.25)
-    env = mr_environment.MREnvironment(game_dir + '/' + 'montezuma_revenge' + '.bin', use_gui=True, repeat_action_probability=0.25)
+    env = mr_environment.MREnvironment(game_dir + '/' + 'montezuma_revenge' + '.bin', use_gui=True, repeat_action_probability=0.0)
     num_actions = len(env.ale.getMinimalActionSet())
     return env, num_actions
 
