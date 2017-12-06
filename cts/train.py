@@ -24,6 +24,8 @@ test_interval = 250000
 test_frames = 125000
 game_dir = './roms'
 
+use_gui = False
+
 vis_update_interval = 10000
 
 
@@ -137,18 +139,18 @@ def train_double_dqn(env, num_actions):
 
 def setup_atari_env():
     # create Atari environment
-    # env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', use_gui=True, repeat_action_probability=0.25)
-    env = mr_environment.MREnvironment(game_dir + '/' + 'montezuma_revenge' + '.bin', use_gui=True, repeat_action_probability=0.0)
+    # env = atari.AtariEnvironment(game_dir + '/' + game + '.bin', use_gui=use_gui, repeat_action_probability=0.25)
+    env = mr_environment.MREnvironment(game_dir + '/' + 'montezuma_revenge' + '.bin', use_gui=use_gui, repeat_action_probability=0.0)
     num_actions = len(env.ale.getMinimalActionSet())
     return env, num_actions
 
 def setup_toy_mr_env():
-    env = toy_mr.ToyMR('../mr_maps/full_mr_map.txt', max_lives=5, repeat_action_probability=0.25)
+    env = toy_mr.ToyMR('../mr_maps/full_mr_map.txt', max_lives=5, repeat_action_probability=0.25, use_gui=use_gui)
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
 def setup_four_rooms_env():
-    env = toy_mr.ToyMR('../mr_maps/four_rooms.txt', max_num_actions=10000)
+    env = toy_mr.ToyMR('../mr_maps/four_rooms.txt', max_num_actions=10000, use_gui=use_gui)
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
