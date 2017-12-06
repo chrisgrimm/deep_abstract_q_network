@@ -115,10 +115,10 @@ def train_dqn(env, num_actions):
     train(agent, env, test_epsilon, results_dir)
 
 def train_double_dqn(env, num_actions):
-    results_dir = './results/double_dqn/' + game + '_fixed_mmc'
+    results_dir = './results/double_dqn/' + game + '_with_bellemare_comments_bonus_1.0'
 
-    training_epsilon = 0.01
-    test_epsilon = 0.001
+    training_epsilon = 0.1
+    test_epsilon = 0.05
 
     # frame_history = 1
     # enc_func = toy_mr_encoder.encode_toy_mr_state
@@ -129,9 +129,9 @@ def train_double_dqn(env, num_actions):
     cts_size = (42, 42, 8)
     enc_func = atari_encoder.encode_state
 
-    dqn = atari_dqn.AtariDQN(frame_history, num_actions)
-    agent = dq_learner_pc.DQLearner(dqn, num_actions, frame_history=frame_history, epsilon_end=training_epsilon,
-                                    state_encoder=enc_func, cts_size=cts_size)
+    dqn = atari_dqn.AtariDQN(frame_history, num_actions, shared_bias=False)
+    agent = dq_learner_pc.DQLearner(dqn, num_actions, target_copy_freq=10000, frame_history=frame_history, epsilon_end=training_epsilon,
+                                    state_encoder=enc_func, cts_size=cts_size, bonus_beta=1.0)
 
     train(agent, env, test_epsilon, results_dir, max_episode_steps=None)
 
