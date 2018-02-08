@@ -5,9 +5,10 @@ room_index = 3
 class MREnvironment(atari.AtariEnvironment):
 
     def __init__(self, atari_rom, frame_skip=4, noop_max=30, terminate_on_end_life=False, random_seed=123,
-                 frame_history_length=4, use_gui=False, max_num_frames=500000, repeat_action_probability=0.0, single_life=False):
+                 frame_history_length=4, use_gui=False, max_num_frames=500000, repeat_action_probability=0.0, single_life=False,
+                 record_screen_dir=None):
         super(MREnvironment, self).__init__(atari_rom, frame_skip, noop_max, terminate_on_end_life, random_seed,
-                 frame_history_length, use_gui, max_num_frames, repeat_action_probability)
+                 frame_history_length, use_gui, max_num_frames, repeat_action_probability, record_screen_dir)
         self.discovered_rooms = set()
         self.single_life = single_life
         self.abstraction = None

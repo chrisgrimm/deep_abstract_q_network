@@ -68,3 +68,6 @@ class PitfallAbstraction(object):
         preds['in_treasure_loc'] = pred
 
         return tuple(sorted(preds.items()))
+
+    def reset(self):
+        pass

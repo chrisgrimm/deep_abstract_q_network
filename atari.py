@@ -11,12 +11,15 @@ from embedding_dqn.abstraction_tools import montezumas_abstraction as ma
 class AtariEnvironment(interfaces.Environment):
 
     def __init__(self, atari_rom, frame_skip=4, noop_max=30, terminate_on_end_life=False, random_seed=123,
-                 frame_history_length=4, use_gui=False, max_num_frames=500000, repeat_action_probability=0.0):
+                 frame_history_length=4, use_gui=False, max_num_frames=500000, repeat_action_probability=0.0,
+                 record_screen_dir=None):
         self.ale = ALEInterface()
         self.ale.setInt('random_seed', random_seed)
         self.ale.setInt('frame_skip', 1)
         self.ale.setFloat('repeat_action_probability', 0.0)
         self.ale.setInt('max_num_frames_per_episode', max_num_frames)
+        if record_screen_dir is not None:
+            self.ale.setString('record_screen_dir', record_screen_dir)
         self.ale.loadROM(atari_rom)
         self.frame_skip = frame_skip
         self.repeat_action_probability = repeat_action_probability
