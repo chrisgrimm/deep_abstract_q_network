@@ -1,7 +1,5 @@
-import random
 import configparser
 
-import interfaces
 import tensorflow as tf
 import numpy as np
 import tf_helpers as th
@@ -9,30 +7,26 @@ import tf_helpers as th
 
 class DQLearner:
 
-    def __init__(self, config_file, restore_network_file=None):
+    def __init__(self, config_file, inp_shape, inp_dtype, restore_network_file=None):
         # Set configuration params
-        config = configparser.ConfigParser()
-        config.read(config_file)
-        self.frame_history = config['FRAME_HISTORY']
-        self.replay_start_size = config['REPLAY_START_SIZE']
-        self.epsilon_start = config['EPSILON_START']
-        self.epsilon = self.epsilon_start
-        self.epsilon = dict()
-        self.epsilon_min = config['EPSILON_END']
-        self.epsilon_steps = config['EPSILON_STEPS']
-        self.epsilon_delta = (self.epsilon_start - self.epsilon_min) / self.epsilon_steps
-        self.update_freq = config['NETWORK_UPDATE_FREQ']
-        self.target_copy_freq = config['TARGET_COPY_FREQ']
+        self.inp_shape = inp_shape
+        self.inp_dtype = inp_dtype
+        self.config = configparser.ConfigParser()
+        self.config.read(config_file)
+        self.frame_history = self.config['FRAME_HISTORY']
+        self.replay_start_size = self.config['REPLAY_START_SIZE']
+        self.update_freq = self.config['NETWORK_UPDATE_FREQ']
+        self.target_copy_freq = self.config['TARGET_COPY_FREQ']
         self.action_ticker = 1
-        self.num_actions = config['NUM_ACTIONS']
-        self.batch_size = config['BATCH_SIZE']
-        self.max_mmc_path_length = config['MAX_MMC_PATH_LENGTH']
-        self.mmc_beta = config['MMC_BETA']
-        self.gamma = config['GAMMA']
-        self.double = config['DOUBLE']
-        self.use_mmc = config['USE_MMC']
-        error_clip = config['ERROR_CLIP']
-        learning_rate = config['LEARNING_RATE']
+        self.num_actions = self.config['NUM_ACTIONS']
+        self.batch_size = self.config['BATCH_SIZE']
+        self.max_mmc_path_length = self.config['MAX_MMC_PATH_LENGTH']
+        self.mmc_beta = self.config['MMC_BETA']
+        self.gamma = self.config['GAMMA']
+        self.double = self.config['DOUBLE']
+        self.use_mmc = self.config['USE_MMC']
+        error_clip = self.config['ERROR_CLIP']
+        learning_rate = self.config['LEARNING_RATE']
 
         # Set tensorflow config
         tf_config = tf.ConfigProto()
@@ -41,10 +35,8 @@ class DQLearner:
         self.sess = tf.Session(config=tf_config)
 
         # Setup tensorflow placeholders
-        self.inp_actions = tf.placeholder(tf.float32, [None, self.num_actions])
-        inp_shape = [None, 84, 84, self.frame_history]
-        inp_dtype = 'uint8'
         assert type(inp_dtype) is str
+        self.inp_actions = tf.placeholder(tf.float32, [None, self.num_actions])
         self.inp_frames = tf.placeholder(inp_dtype, inp_shape)
         self.inp_sp_frames = tf.placeholder(inp_dtype, inp_shape)
         self.inp_terminated = tf.placeholder(tf.bool, [None])
@@ -110,52 +102,47 @@ class DQLearner:
     def run_learning_episode(self, environment, episode_dict, max_episode_steps=100000):
         episode_steps = 0
         total_reward = 0
-        episode_finished = False
 
         for step in range(max_episode_steps):
             if environment.is_current_state_terminal() or self.extra_termination_conditions(step, episode_dict):
                 break
 
+            # Get action
             state = environment.get_current_state()
-            if np.random.uniform(0, 1) < self.epsilon:
-                action = np.random.choice(environment.get_actions_for_state(state))
-                # action = self.get_safe_explore_action(state, environment)
-            else:
-                action = self.get_action(state, episode_dict)
+            action = self.get_action(state, environment, episode_dict)
 
-            if self.action_ticker > self.replay_start_size:
-                self.epsilon = max(self.epsilon_min, self.epsilon - self.epsilon_delta)
-
+            # Act
             state, action, env_reward, next_state, is_terminal = environment.perform_action(action)
             total_reward += env_reward
 
-            self.add_experience_to_replay(state, action, env_reward, next_state, is_terminal, episode_dict)
+            # Record experience
+            self.record_experience(state, action, env_reward, next_state, is_terminal, episode_dict)
 
+            # Update network weights
             if (self.action_ticker > self.replay_start_size) and (self.action_ticker % self.update_freq == 0):
-                loss = self.update_q_values()
+                self.update_q_values(step, episode_dict)
+
+            # Copy target network
             if (self.action_ticker - self.replay_start_size) % self.target_copy_freq == 0:
                 self.sess.run(self.copy_op)
 
             self.action_ticker += 1
             episode_steps += 1
 
-            if episode_finished:
-                break
-
         return episode_steps, total_reward
 
     def construct_q_network(self, network_input):
         raise NotImplemented
 
-    def update_q_values(self):
+    def update_q_values(self, step, episode_dict):
         raise NotImplemented
 
     def extra_termination_conditions(self, step, episode_dict):
         return False
 
-    def get_action(self, state, episode_dict):
+    def get_action(self, state, environment, episode_dict):
         raise NotImplemented
 
-    def add_experience_to_replay(self, state, action, env_reward, next_state, is_terminal, episode_dict):
+    def record_experience(self, state, action, env_reward, next_state, is_terminal, episode_dict):
         raise NotImplemented
 
