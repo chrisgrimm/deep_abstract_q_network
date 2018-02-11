@@ -1,32 +1,33 @@
 import configparser
 
 import tensorflow as tf
-import numpy as np
 import tf_helpers as th
 
 
 class DQLearner:
 
-    def __init__(self, config_file, inp_shape, inp_dtype, restore_network_file=None):
+    def __init__(self, config, environment, restore_network_file=None):
+
         # Set configuration params
-        self.inp_shape = inp_shape
-        self.inp_dtype = inp_dtype
-        self.config = configparser.ConfigParser()
-        self.config.read(config_file)
-        self.frame_history = self.config['FRAME_HISTORY']
-        self.replay_start_size = self.config['REPLAY_START_SIZE']
-        self.update_freq = self.config['NETWORK_UPDATE_FREQ']
-        self.target_copy_freq = self.config['TARGET_COPY_FREQ']
+        self.config = config
+        self.frame_history_length = int(self.config['ENV']['FRAME_HISTORY_LENGTH'])
+        self.inp_shape = [None] + list(eval(self.config['DQL']['INPUT_SHAPE'])) + [self.frame_history_length]
+        self.inp_dtype = str(self.config['DQL']['INPUT_DTYPE'])
+        self.replay_start_size = int(self.config['DQL']['REPLAY_START_SIZE'])
+        self.update_freq = int(self.config['DQL']['NETWORK_UPDATE_FREQ'])
+        self.target_copy_freq = int(self.config['DQL']['TARGET_COPY_FREQ'])
+        self.batch_size = int(self.config['DQL']['BATCH_SIZE'])
+        self.max_mmc_path_length = int(self.config['DQL']['MAX_MMC_PATH_LENGTH'])
+        self.mmc_beta = float(self.config['DQL']['MMC_BETA'])
+        self.gamma = float(self.config['DQL']['GAMMA'])
+        self.double = bool(self.config['DQL']['DOUBLE'])
+        self.use_mmc = bool(self.config['DQL']['USE_MMC'])
+        error_clip = float(self.config['DQL']['ERROR_CLIP'])
+        learning_rate = float(self.config['DQL']['LEARNING_RATE'])
+
+        self.environment = environment
+        self.num_actions = len(self.environment.get_actions_for_state(None))
         self.action_ticker = 1
-        self.num_actions = self.config['NUM_ACTIONS']
-        self.batch_size = self.config['BATCH_SIZE']
-        self.max_mmc_path_length = self.config['MAX_MMC_PATH_LENGTH']
-        self.mmc_beta = self.config['MMC_BETA']
-        self.gamma = self.config['GAMMA']
-        self.double = self.config['DOUBLE']
-        self.use_mmc = self.config['USE_MMC']
-        error_clip = self.config['ERROR_CLIP']
-        learning_rate = self.config['LEARNING_RATE']
 
         # Set tensorflow config
         tf_config = tf.ConfigProto()
@@ -35,24 +36,24 @@ class DQLearner:
         self.sess = tf.Session(config=tf_config)
 
         # Setup tensorflow placeholders
-        assert type(inp_dtype) is str
+        assert type(self.inp_dtype) is str
         self.inp_actions = tf.placeholder(tf.float32, [None, self.num_actions])
-        self.inp_frames = tf.placeholder(inp_dtype, inp_shape)
-        self.inp_sp_frames = tf.placeholder(inp_dtype, inp_shape)
+        self.inp_frames = tf.placeholder(self.inp_dtype, self.inp_shape)
+        self.inp_sp_frames = tf.placeholder(self.inp_dtype, self.inp_shape)
         self.inp_terminated = tf.placeholder(tf.bool, [None])
         self.inp_reward = tf.placeholder(tf.float32, [None])
         self.inp_mmc_reward = tf.placeholder(tf.float32, [None])
-        self.inp_mask = tf.placeholder(inp_dtype, [None, self.frame_history])
-        self.inp_sp_mask = tf.placeholder(inp_dtype, [None, self.frame_history])
+        self.inp_mask = tf.placeholder(self.inp_dtype, [None, self.frame_history_length])
+        self.inp_sp_mask = tf.placeholder(self.inp_dtype, [None, self.frame_history_length])
 
         # Setup Q-Networks
         with tf.variable_scope('online'):
-            mask_shape = [-1, 1, 1, self.frame_history]
+            mask_shape = [-1, 1, 1, self.frame_history_length]
             mask = tf.reshape(self.inp_mask, mask_shape)
             masked_input = self.inp_frames * mask
             self.q_online = self.construct_q_network(masked_input)
         with tf.variable_scope('target'):
-            mask_shape = [-1, 1, 1, self.frame_history]
+            mask_shape = [-1, 1, 1, self.frame_history_length]
             sp_mask = tf.reshape(self.inp_sp_mask, mask_shape)
             masked_sp_input = self.inp_sp_frames * sp_mask
             self.q_target = self.construct_q_network(masked_sp_input)

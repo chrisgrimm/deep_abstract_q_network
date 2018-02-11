@@ -1,3 +1,4 @@
+import configparser
 from ale_python_interface import ALEInterface
 import interfaces
 import numpy as np
@@ -5,43 +6,49 @@ import cv2
 import datetime
 import copy
 import pygame
-import os
-from embedding_dqn.abstraction_tools import montezumas_abstraction as ma
 
 class AtariEnvironment(interfaces.Environment):
 
-    def __init__(self, atari_rom, frame_skip=4, noop_max=30, terminate_on_end_life=False, random_seed=123,
-                 frame_history_length=4, use_gui=False, max_num_frames=500000, repeat_action_probability=0.0,
-                 record_screen_dir=None):
+    def __init__(self, config, use_gui=False, record_screen_dir=None):
+        # Set configuration params
+        self.config = config
+        random_seed = int(self.config['ENV']['RANDOM_SEED'])
+        self.atari_rom = self.config['ENV']['ROM']
+        self.frame_skip = int(self.config['ENV']['FRAME_SKIP'])
+        self.noop_max = int(self.config['ENV']['NOOP_MAX'])
+        self.terminate_on_end_life = bool(self.config['ENV']['TERMINATE_ON_END_LIFE'])
+        self.frame_history_length = int(self.config['ENV']['FRAME_HISTORY_LENGTH'])
+        self.max_num_frames = int(self.config['ENV']['MAX_NUM_FRAMES'])
+        self.repeat_action_probability = float(self.config['ENV']['REPEAT_ACTION_PROBABILITY'])
+
+        # Setup ALE
         self.ale = ALEInterface()
         self.ale.setInt('random_seed', random_seed)
         self.ale.setInt('frame_skip', 1)
         self.ale.setFloat('repeat_action_probability', 0.0)
-        self.ale.setInt('max_num_frames_per_episode', max_num_frames)
+        self.ale.setInt('max_num_frames_per_episode', self.max_num_frames)
         if record_screen_dir is not None:
             self.ale.setString('record_screen_dir', record_screen_dir)
-        self.ale.loadROM(atari_rom)
-        self.frame_skip = frame_skip
-        self.repeat_action_probability = repeat_action_probability
-        self.noop_max = noop_max
-        self.terminate_on_end_life = terminate_on_end_life
+        self.ale.loadROM(self.atari_rom)
         self.current_lives = self.ale.lives()
         self.is_terminal = False
         self.previous_action = 0
         self.num_actions = len(self.ale.getMinimalActionSet())
 
+        # Create screen
         w, h = self.ale.getScreenDims()
         self.screen_width = w
         self.screen_height = h
         self.zero_last_frames = [np.zeros((84, 84), dtype=np.uint8), np.zeros((84, 84), dtype=np.uint8)]
         self.last_two_frames = copy.copy(self.zero_last_frames)
-        self.zero_history_frames = [np.zeros((84, 84), dtype=np.uint8) for i in range(0, frame_history_length)]
+        self.zero_history_frames = [np.zeros((84, 84), dtype=np.uint8) for i in range(0, self.frame_history_length)]
         self.frame_history = copy.copy(self.zero_history_frames)
         atari_actions = self.ale.getMinimalActionSet()
         self.atari_to_onehot = dict(zip(atari_actions, range(len(atari_actions))))
         self.onehot_to_atari = dict(zip(range(len(atari_actions)), atari_actions))
         self.screen_image = np.zeros(self.screen_height * self.screen_width, dtype=np.uint8)
 
+        # Create GUI
         self.use_gui = use_gui
         self.original_frame = np.zeros((h, w), dtype=np.uint8)
         self.refresh_time = datetime.timedelta(milliseconds=1000 / 60)
@@ -100,7 +107,6 @@ class AtariEnvironment(interfaces.Environment):
         return reward
 
     def get_current_state(self):
-        #return copy.copy(self.frame_history)
         return [x.copy() for x in self.frame_history]
 
     def get_actions_for_state(self, state):
@@ -137,84 +143,7 @@ class AtariEnvironment(interfaces.Environment):
             self.last_refresh = current_time
 
             gui_image = np.tile(np.transpose(self.original_frame, axes=(1, 0, 2)), [1, 1, 3])
-            # gui_image = np.zeros((self.screen_width, self.screen_height, 3), dtype=np.uint8)
-            # channel = np.random.randint(3)
-            # gui_image[:,:,channel] = np.transpose(self.original_frame, axes=(1, 0, 2))[:,:,0]
 
             pygame.surfarray.blit_array(self.gui_screen, gui_image)
             pygame.display.update()
 
-
-def get_action_from_user(action_mapping, special_actions):
-    while True:
-        action = raw_input('Action: ')
-        if action in special_actions:
-            return (action, None)
-        try:
-            action, mapped_action = action, action_mapping[action]
-            return (action, mapped_action)
-        except KeyError:
-            pass
-
-def handle_special_actions(data, game, action_mapping, action_recording, action):
-    if action == 'run_recording':
-        file_name = raw_input('Recording File: ')
-        recording = [int(x) for x in open(file_name, 'r').readlines()]
-        for action in recording:
-            game.perform_action(action)
-            action_recording.append(action)
-    elif action == 'set_savefile':
-        file_name = raw_input('Recording File: ')
-        data['savefile'] = file_name
-    elif action == 'save':
-        with open(data['savefile'], 'w') as f:
-            for a in action_recording:
-                f.write(str(a)+'\n')
-    elif action == 'restore':
-        game.reset_environment()
-        with open(data['savefile'], 'r') as f:
-            del action_recording[:]
-            recording = [int(x) for x in open(data['savefile'], 'r').readlines()]
-            for action in recording:
-                game.perform_action(action)
-                action_recording.append(action)
-    elif action == 'screenshot':
-        name = raw_input('Name:')
-        path = os.path.join(data['screenshot_dir'], name) + '.png'
-        print path
-        state = game.get_current_state()[-1]
-        cv2.imwrite(path, state)
-
-
-
-if __name__ == '__main__':
-    rom_name = './roms/montezuma_revenge.bin'
-    game = AtariEnvironment(rom_name, frame_skip=4)
-    actions = game.get_actions_for_state(None)
-
-    action_mapping = {'w': 2, 'a': 4, 'd': 3, ' ': 1, 's': 5, '': 0}
-    special_actions = ['run_recording', 'set_savefile', 'save', 'restore', 'screenshot']
-    data = {'savefile': 'default',
-            'screenshot_dir': './screenshots'}
-    if not os.path.isdir(data['screenshot_dir']):
-        os.mkdir(data['screenshot_dir'])
-    #action_mapping = dict(zip([str(x) for x in range(len(actions))], range(len(actions))))
-    print len(action_mapping)
-    buffer = ['', '']
-    action_recording = []
-    while True:
-        if game.is_current_state_terminal():
-            game.reset_environment()
-        action, mapped_action = get_action_from_user(action_mapping, special_actions)
-        if action in special_actions:
-            handle_special_actions(data, game, action_mapping, action_recording, action)
-        else:
-            buffer = buffer[1:] + [action]
-            if buffer == ['d', ' ']:
-                mapped_action = 11
-            if buffer == ['a', ' ']:
-                mapped_action = 12
-            print 'Performing', '-'+action+'-'
-            game.perform_action(actions[mapped_action])
-
-            action_recording.append(actions[mapped_action])

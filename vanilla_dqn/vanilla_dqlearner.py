@@ -6,26 +6,25 @@ from abstract_dqlearner import DQLearner
 from replay_memory import ReplayMemory
 
 
-class VanillaDQLearner(object, DQLearner):
-    def __init__(self, config_file, inp_shape, inp_dtype, restore_network_file=None):
-        super(VanillaDQLearner, self).__init__(config_file, inp_shape, inp_dtype,
-                                               restore_network_file=restore_network_file)
+class VanillaDQLearner(DQLearner, object):
+    def __init__(self, config, environment, restore_network_file=None):
+        super(VanillaDQLearner, self).__init__(config, environment, restore_network_file=restore_network_file)
 
         # Set configuration params
-        self.replay_memory_size = self.config['REPLAY_MEMORY_SIZE']
-        self.shared_bias = self.config['SHARED_BIAS']
-        self.epsilon = self.config['EPSILON_START']
-        self.epsilon_min = self.config['EPSILON_END']
-        self.epsilon_steps = self.config['EPSILON_STEPS']
+        self.replay_memory_size = self.config['DQL']['REPLAY_MEMORY_SIZE']
+        self.shared_bias = self.config['DQL']['SHARED_BIAS']
+        self.epsilon = self.config['DQL']['EPSILON_START']
+        self.epsilon_min = self.config['DQL']['EPSILON_END']
+        self.epsilon_steps = self.config['DQL']['EPSILON_STEPS']
         self.epsilon_delta = (self.epsilon - self.epsilon_min) / self.epsilon_steps
 
         # Setup replay memory
-        self.replay_buffer = ReplayMemory(inp_shape, inp_dtype, self.replay_memory_size, self.frame_history)
+        self.replay_buffer = ReplayMemory(self.inp_shape, self.inp_dtype, self.replay_memory_size, self.frame_history_length)
 
     def construct_q_network(self, network_input):
         input = tf.image.convert_image_dtype(network_input, tf.float32)
         with tf.variable_scope('c1'):
-            c1 = th.down_convolution(input, 8, 4, self.frame_history, 32, tf.nn.relu)
+            c1 = th.down_convolution(input, 8, 4, self.frame_history_length, 32, tf.nn.relu)
         with tf.variable_scope('c2'):
             c2 = th.down_convolution(c1, 4, 2, 32, 64, tf.nn.relu)
         with tf.variable_scope('c3'):
@@ -60,7 +59,7 @@ class VanillaDQLearner(object, DQLearner):
             state_input = np.transpose(state, size + [0])
             [q_values] = self.sess.run([self.q_online],
                                        feed_dict={self.inp_frames: [state_input],
-                                                  self.inp_mask: np.ones((1, self.frame_history), dtype=np.float32)})
+                                                  self.inp_mask: np.ones((1, self.frame_history_length), dtype=np.float32)})
             action = np.argmax(q_values[0])
 
         if self.replay_buffer.size() > self.replay_start_size:
