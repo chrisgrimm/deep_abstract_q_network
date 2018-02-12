@@ -14,11 +14,11 @@ class Experiment:
     def __init__(self, config):
         # Set configuration params
         self.config = config
-        self.num_training_steps = self.config['EXP']['NUM_TRAINING_STEPS']
-        self.test_interval = self.config['EXP']['TEST_INTERVAL']
-        self.test_frames = self.config['EXP']['TEST_FRAMES']
-        self.test_epsilon = self.config['EXP']['TEST_EPSILON']
-        self.test_max_episode_frames = self.config['EXP']['TEST_MAX_EPISODE_FRAMES']
+        self.num_training_steps = int(self.config['EXP']['NUM_TRAINING_STEPS'])
+        self.test_interval = int(self.config['EXP']['TEST_INTERVAL'])
+        self.test_frames = int(self.config['EXP']['TEST_FRAMES'])
+        self.test_epsilon = float(self.config['EXP']['TEST_EPSILON'])
+        self.test_max_episode_frames = int(self.config['EXP']['TEST_MAX_EPISODE_FRAMES'])
 
         self.environment, self.num_actions = self.get_environment()
 
@@ -45,7 +45,7 @@ class Experiment:
             if np.random.uniform(0, 1) < self.test_epsilon:
                 action = np.random.choice(self.environment.get_actions_for_state(state))
             else:
-                action = self.agent.get_action(state, evaluation=True)
+                action = self.agent.get_action(state, self.environment, {})
 
             state, action, reward, next_state, is_terminal = self.environment.perform_action(action)
             total_reward += reward
@@ -56,7 +56,7 @@ class Experiment:
 
         return episode_rewards
 
-    def train(self):
+    def run(self):
         self.environment.terminate_on_end_life = False
 
         # TODO: Make a experiment folder and copy the config file for the experiment
@@ -84,7 +84,7 @@ class Experiment:
             if steps_until_test <= 0:
                 steps_until_test += self.test_interval
                 print 'Evaluating network...'
-                episode_rewards, num_explored_states = self.evaluate_agent_reward()
+                episode_rewards = self.evaluate_agent_reward()
                 mean_reward = np.mean(episode_rewards)
 
                 if mean_reward > best_eval_reward:
@@ -117,11 +117,9 @@ class Experiment:
         raise NotImplemented
 
     def prepare_for_evaluation(self):
-        # self.enviornment.terminate_on_end_life = False
         pass
 
     def prepare_for_training(self):
-        # self.enviornment.terminate_on_end_life = True
         pass
 
 

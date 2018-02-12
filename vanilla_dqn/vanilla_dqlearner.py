@@ -11,15 +11,14 @@ class VanillaDQLearner(DQLearner, object):
         super(VanillaDQLearner, self).__init__(config, environment, restore_network_file=restore_network_file)
 
         # Set configuration params
-        self.replay_memory_size = self.config['DQL']['REPLAY_MEMORY_SIZE']
-        self.shared_bias = self.config['DQL']['SHARED_BIAS']
-        self.epsilon = self.config['DQL']['EPSILON_START']
-        self.epsilon_min = self.config['DQL']['EPSILON_END']
-        self.epsilon_steps = self.config['DQL']['EPSILON_STEPS']
-        self.epsilon_delta = (self.epsilon - self.epsilon_min) / self.epsilon_steps
+        self.replay_memory_size = int(self.config['DQL']['REPLAY_MEMORY_SIZE'])
+        self.epsilon = float(self.config['DQL']['EPSILON_START'])
+        self.epsilon_min = float(self.config['DQL']['EPSILON_END'])
+        self.epsilon_steps = int(self.config['DQL']['EPSILON_STEPS'])
+        self.epsilon_delta = (self.epsilon - self.epsilon_min) / float(self.epsilon_steps)
 
         # Setup replay memory
-        self.replay_buffer = ReplayMemory(self.inp_shape, self.inp_dtype, self.replay_memory_size, self.frame_history_length)
+        self.replay_buffer = ReplayMemory(self.frame_shape, self.frame_dtype, self.replay_memory_size, self.frame_history_length)
 
     def construct_q_network(self, network_input):
         input = tf.image.convert_image_dtype(network_input, tf.float32)
@@ -34,7 +33,7 @@ class VanillaDQLearner(DQLearner, object):
         with tf.variable_scope('fc1'):
             fc1 = th.fully_connected(c3, 512, tf.nn.relu)
         with tf.variable_scope('fc2'):
-            if self.shared_bias:
+            if self.config['DQL']['SHARED_BIAS']:
                 q_values = th.fully_connected_shared_bias(fc1, self.num_actions, lambda x: x)
             else:
                 q_values = th.fully_connected(fc1, self.num_actions, lambda x: x)
@@ -55,7 +54,7 @@ class VanillaDQLearner(DQLearner, object):
         if np.random.uniform(0, 1) < self.epsilon:
             action = np.random.choice(environment.get_actions_for_state(state))
         else:
-            size = list(np.array(range(len(self.inp_shape))) + 1)
+            size = list(np.array(range(len(self.frame_shape))) + 1)
             state_input = np.transpose(state, size + [0])
             [q_values] = self.sess.run([self.q_online],
                                        feed_dict={self.inp_frames: [state_input],

@@ -15,11 +15,11 @@ class VanillaDQNExperiment(Experiment, object):
         return agent
 
     def prepare_for_evaluation(self):
-        self.enviornment.terminate_on_end_life = False
-        self.environment.reset_environment()
+        self.environment.terminate_on_end_life = False
 
     def prepare_for_training(self):
-        self.enviornment.terminate_on_end_life = True
+        self.environment.reset_environment()
+        self.environment.terminate_on_end_life = True
 
 
 if __name__ == "__main__":
@@ -30,4 +30,5 @@ if __name__ == "__main__":
     config = configparser.ConfigParser()
     config.read(config_file)
 
-    VanillaDQNExperiment(config)
+    experiment = VanillaDQNExperiment(config)
+    experiment.run()

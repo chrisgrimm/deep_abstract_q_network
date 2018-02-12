@@ -11,8 +11,9 @@ class DQLearner:
         # Set configuration params
         self.config = config
         self.frame_history_length = int(self.config['ENV']['FRAME_HISTORY_LENGTH'])
-        self.inp_shape = [None] + list(eval(self.config['DQL']['INPUT_SHAPE'])) + [self.frame_history_length]
-        self.inp_dtype = str(self.config['DQL']['INPUT_DTYPE'])
+        self.frame_shape = eval(self.config['DQL']['FRAME_SHAPE'])
+        self.inp_shape = [None] + list(self.frame_shape) + [self.frame_history_length]
+        self.frame_dtype = str(self.config['DQL']['FRAME_DTYPE'])
         self.replay_start_size = int(self.config['DQL']['REPLAY_START_SIZE'])
         self.update_freq = int(self.config['DQL']['NETWORK_UPDATE_FREQ'])
         self.target_copy_freq = int(self.config['DQL']['TARGET_COPY_FREQ'])
@@ -20,8 +21,8 @@ class DQLearner:
         self.max_mmc_path_length = int(self.config['DQL']['MAX_MMC_PATH_LENGTH'])
         self.mmc_beta = float(self.config['DQL']['MMC_BETA'])
         self.gamma = float(self.config['DQL']['GAMMA'])
-        self.double = bool(self.config['DQL']['DOUBLE'])
-        self.use_mmc = bool(self.config['DQL']['USE_MMC'])
+        self.double = self.config['DQL']['DOUBLE'] == 'True'
+        self.use_mmc = self.config['DQL']['USE_MMC'] == 'True'
         error_clip = float(self.config['DQL']['ERROR_CLIP'])
         learning_rate = float(self.config['DQL']['LEARNING_RATE'])
 
@@ -36,15 +37,15 @@ class DQLearner:
         self.sess = tf.Session(config=tf_config)
 
         # Setup tensorflow placeholders
-        assert type(self.inp_dtype) is str
-        self.inp_actions = tf.placeholder(tf.float32, [None, self.num_actions])
-        self.inp_frames = tf.placeholder(self.inp_dtype, self.inp_shape)
-        self.inp_sp_frames = tf.placeholder(self.inp_dtype, self.inp_shape)
-        self.inp_terminated = tf.placeholder(tf.bool, [None])
-        self.inp_reward = tf.placeholder(tf.float32, [None])
-        self.inp_mmc_reward = tf.placeholder(tf.float32, [None])
-        self.inp_mask = tf.placeholder(self.inp_dtype, [None, self.frame_history_length])
-        self.inp_sp_mask = tf.placeholder(self.inp_dtype, [None, self.frame_history_length])
+        assert type(self.frame_dtype) is str
+        self.inp_actions = tf.placeholder(tf.float32, [None, self.num_actions], name='actions')
+        self.inp_frames = tf.placeholder(self.frame_dtype, self.inp_shape, name='frames')
+        self.inp_sp_frames = tf.placeholder(self.frame_dtype, self.inp_shape, name='sp_frames')
+        self.inp_terminated = tf.placeholder(tf.bool, [None], name='terminated')
+        self.inp_reward = tf.placeholder(tf.float32, [None], name='reward')
+        self.inp_mmc_reward = tf.placeholder(tf.float32, [None], name='mmc_reward')
+        self.inp_mask = tf.placeholder(self.frame_dtype, [None, self.frame_history_length], name='mask')
+        self.inp_sp_mask = tf.placeholder(self.frame_dtype, [None, self.frame_history_length], name='sp_mask')
 
         # Setup Q-Networks
         with tf.variable_scope('online'):
@@ -89,7 +90,7 @@ class DQLearner:
         self.train_op = optimizer.minimize(self.loss, var_list=th.get_vars('online'))
         self.copy_op = th.make_copy_op('online', 'target')
         self.saver = tf.train.Saver(var_list=th.get_vars('online'))
-        self.sess.run(tf.initialize_all_variables())
+        self.sess.run(tf.global_variables_initializer())
 
         # Optionally load previous weights
         if restore_network_file is not None:
