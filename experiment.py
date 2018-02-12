@@ -1,4 +1,5 @@
 import datetime
+import shutil
 
 import configparser
 import numpy as np
@@ -11,14 +12,16 @@ game_dir = './roms'
 
 
 class Experiment:
-    def __init__(self, config):
+    def __init__(self, config_file):
         # Set configuration params
-        self.config = config
+        self.config = configparser.ConfigParser()
+        self.config.read(config_file)
         self.num_training_steps = int(self.config['EXP']['NUM_TRAINING_STEPS'])
         self.test_interval = int(self.config['EXP']['TEST_INTERVAL'])
         self.test_frames = int(self.config['EXP']['TEST_FRAMES'])
         self.test_epsilon = float(self.config['EXP']['TEST_EPSILON'])
         self.test_max_episode_frames = int(self.config['EXP']['TEST_MAX_EPISODE_FRAMES'])
+        self.exp_dir = self.config['EXP']['DIRECTORY']
 
         self.environment, self.num_actions = self.get_environment()
 
@@ -26,6 +29,17 @@ class Experiment:
             raise Exception('Environment ' + self.config['ENV']['ID'] + ' not found')
 
         self.agent = self.get_agent()
+
+        # Create experiment directory
+        if os.path.isdir(self.exp_dir):
+            count = 1
+            exp_dir_prime = self.exp_dir + '_' + str(count)
+            while os.path.isdir(exp_dir_prime):
+                exp_dir_prime = self.exp_dir + '_' + str(count)
+            self.exp_dir = exp_dir_prime
+        os.makedirs(self.exp_dir)
+        self.results_file = open(os.path.join(self.exp_dir, 'results.txt'), 'w')
+        shutil.copy(config_file, os.path.join(self.exp_dir, 'config.ini'))
 
     def evaluate_agent_reward(self):
         self.prepare_for_evaluation()
@@ -59,25 +73,19 @@ class Experiment:
     def run(self):
         self.environment.terminate_on_end_life = False
 
-        # TODO: Make a experiment folder and copy the config file for the experiment
-        # results_fn = '%s/%s_results.txt' % (results_dir, game)
-        # if not os.path.isdir(results_dir):
-        #     os.mkdir(results_dir)
-        # results_file = open(results_fn, 'w')
-
-        step_num = 0
+        step = 0
         steps_until_test = self.test_interval
         best_eval_reward = - float('inf')
-        while step_num < self.num_training_steps:
+        while step < self.num_training_steps:
             self.prepare_for_training()
             self.environment.reset_environment()
 
             start_time = datetime.datetime.now()
             episode_steps, episode_reward = self.agent.run_learning_episode(self.environment, episode_dict={})
             end_time = datetime.datetime.now()
-            step_num += episode_steps
+            step += episode_steps
 
-            print 'Steps:', step_num, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
+            print 'Steps:', step, '\tEpisode Reward:', episode_reward, '\tSteps/sec:', episode_steps / (
                     end_time - start_time).total_seconds()
 
             steps_until_test -= episode_steps
@@ -89,17 +97,15 @@ class Experiment:
 
                 if mean_reward > best_eval_reward:
                     best_eval_reward = mean_reward
-                    # TODO: where are we saving it to?
-                    # self.agent.save_network('%s/%s' % (results_dir, game))
+                    self.agent.save_network(os.path.join(self.exp_dir, 'best_net'))
 
                 print 'Mean Reward:', mean_reward, 'Best:', best_eval_reward
 
-                self.write_episode_data()
+                self.write_episode_data(step, mean_reward)
 
-    def write_episode_data(self):
-        # self.results_file.write('Step: %d -- Mean reward: %.2f -- Num Explored: %s\n' % (step_num, mean_reward, num_explored_states))
-        # self.results_file.flush()
-        pass
+    def write_episode_data(self, step, mean_reward):
+        self.results_file.write('Step: %d -- Mean reward: %.2f\n' % (step, mean_reward))
+        self.results_file.flush()
 
     def get_environment(self):
         environment_id = self.config['ENV']['ID']
@@ -121,6 +127,3 @@ class Experiment:
 
     def prepare_for_training(self):
         pass
-
-
-

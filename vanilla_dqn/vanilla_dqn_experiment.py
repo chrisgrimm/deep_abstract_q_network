@@ -27,8 +27,5 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--config', help='Configuration file path', required=True)
     config_file = parser.parse_args().config
 
-    config = configparser.ConfigParser()
-    config.read(config_file)
-
-    experiment = VanillaDQNExperiment(config)
+    experiment = VanillaDQNExperiment(config_file)
     experiment.run()
