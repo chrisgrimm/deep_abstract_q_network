@@ -1,0 +1,4 @@
+/home/melrod/.local/share/JetBrains/Toolbox/apps/CLion/ch-0/173.4301.33/bin/cmake/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - Unix Makefiles" /home/melrod/projects/dqn/cts
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/melrod/projects/dqn/cts/cmake-build-debug
