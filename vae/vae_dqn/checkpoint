@@ -1,2 +1,0 @@
-model_checkpoint_path: "dqn_vae_net.ckpt"
-all_model_checkpoint_paths: "dqn_vae_net.ckpt"

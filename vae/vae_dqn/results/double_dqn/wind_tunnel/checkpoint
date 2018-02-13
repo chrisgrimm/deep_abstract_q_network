@@ -1,2 +1,0 @@
-model_checkpoint_path: "coin_game_best_net.ckpt"
-all_model_checkpoint_paths: "coin_game_best_net.ckpt"
