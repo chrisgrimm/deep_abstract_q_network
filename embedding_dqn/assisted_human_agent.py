@@ -1,4 +1,4 @@
-import atari
+from environments import atari
 import pygame
 import datetime
 from embedding_dqn.abstraction_tools import montezumas_abstraction as ma

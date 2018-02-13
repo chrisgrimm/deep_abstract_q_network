@@ -2,7 +2,7 @@ import numpy as np
 import pygame
 import tqdm
 
-import toy_mr
+from environments import toy_mr
 import toy_mr_encoder
 import pc_cts
 

@@ -1,14 +1,4 @@
-from ale_python_interface import ALEInterface
-import interfaces
-import numpy as np
-import cv2
-import datetime
-import copy
-import pygame
-import atari
-
-
-
+from environments import atari
 
 
 class AbstractAtariEnvironment(atari.AtariEnvironment):

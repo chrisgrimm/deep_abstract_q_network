@@ -4,11 +4,9 @@ import numpy as np
 import tqdm
 import os
 
-import atari
+from environments import atari, coin_game, wind_tunnel
 import dq_learner
 import atari_dqn
-import coin_game
-import wind_tunnel
 import daqn
 #import tabular_dqn
 #import tabular_coin_game

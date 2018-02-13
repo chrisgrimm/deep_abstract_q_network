@@ -5,23 +5,14 @@ import tqdm
 import os
 import tensorflow as tf
 
-import atari
+from environments import atari, coin_game, toy_mr, wind_tunnel
 import atari_dqn
-import coin_game
 import dq_learner
-import toy_mr
-import wind_tunnel
-import daqn
 #import tabular_dqn
 #import tabular_coin_game
-from cts import atari_encoder
-from cts import toy_mr_encoder
 from embedding_dqn import mr_environment
 from embedding_dqn import oo_rmax_learner
-from embedding_dqn.abstraction_tools import hero_abstraction
 from embedding_dqn.abstraction_tools import mr_abstraction_ram as mr_abs
-from embedding_dqn.abstraction_tools import venture_abstraction
-from embedding_dqn.abstraction_tools import pitfall_abstraction
 
 # import daqn_clustering
 # import dq_learner_priors

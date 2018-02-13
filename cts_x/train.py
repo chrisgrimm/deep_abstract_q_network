@@ -4,19 +4,12 @@ import numpy as np
 import tqdm
 import os
 
-import atari
 import atari_dqn
-import coin_game
-import toy_mr
-import wind_tunnel
-import daqn
-import tabular_dqn
-import tabular_coin_game
+from environments import toy_mr
 # import daqn_clustering
 # import dq_learner_priors
 from cts import atari_encoder
 from cts import dq_learner_pc
-from cts import toy_mr_encoder
 from embedding_dqn import mr_environment
 
 num_steps = 50000000

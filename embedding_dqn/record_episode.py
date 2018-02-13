@@ -1,27 +1,15 @@
-import datetime
-
 import numpy as np
 import pygame
 import tqdm
 import os
 
-import atari
-import atari_dqn
-import coin_game
-import dq_learner
-import toy_mr
-import wind_tunnel
-import daqn
-import tabular_dqn
-import tabular_coin_game
+from environments import toy_mr
 from embedding_dqn import mr_environment
-from embedding_dqn.abstraction_tools import montezumas_abstraction as ma
 import l0_learner
 import scipy.misc
 
 # import daqn_clustering
 # import dq_learner_priors
-from embedding_dqn import rmax_learner
 
 game_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../roms')
 

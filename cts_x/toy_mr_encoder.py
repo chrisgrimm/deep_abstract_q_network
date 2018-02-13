@@ -1,5 +1,5 @@
 import numpy as np
-import toy_mr
+from environments import toy_mr
 
 SYMBOLS = [toy_mr.WALL_CODE, toy_mr.KEY_CODE, toy_mr.DOOR_CODE, toy_mr.TRAP_CODE, toy_mr.AGENT_CODE, toy_mr.LIVES_CODE]
 ENCODING_LENGTH = int(np.log2(np.max(SYMBOLS))) + 1

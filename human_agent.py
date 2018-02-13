@@ -1,13 +1,9 @@
-import atari
+from environments import atari
 import pygame
 import datetime
 
-from embedding_dqn import mr_environment
-from embedding_dqn.abstraction_tools import hero_abstraction
 from embedding_dqn.abstraction_tools import mr_abstraction_ram
-from embedding_dqn.abstraction_tools import mr_abstraction_ram as mr_abs
 from embedding_dqn.abstraction_tools import venture_abstraction
-from embedding_dqn.abstraction_tools import pitfall_abstraction
 
 game_dir = './roms'
 game = 'venture'

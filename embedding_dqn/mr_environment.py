@@ -1,4 +1,4 @@
-import atari
+from environments import atari
 
 room_index = 3
 

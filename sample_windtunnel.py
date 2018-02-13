@@ -4,12 +4,9 @@ import datetime
 import numpy as np
 import tqdm
 
-import atari
 import dq_learner
 import atari_dqn
-import coin_game
-import wind_tunnel
-import daqn
+from environments import wind_tunnel
 
 
 def evaluate_agent_reward(steps, env, agent, epsilon):

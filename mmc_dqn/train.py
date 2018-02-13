@@ -5,16 +5,13 @@ import numpy as np
 import tqdm
 import os
 
-import atari
+from environments import atari, coin_game, toy_mr, wind_tunnel
 import atari_dqn
-import coin_game
 import dq_learner
-import toy_mr
-import wind_tunnel
 
 # import daqn_clustering
 # import dq_learner_priors
-from embedding_dqn import rmax_learner, mr_environment
+from embedding_dqn import mr_environment
 
 num_steps = 50000000
 test_interval = 250000
@@ -133,7 +130,6 @@ def setup_four_rooms_env():
     return env, num_actions
 
 def setup_mr_env():
-    from embedding_dqn.abstraction_tools import montezumas_abstraction as ma
     env = mr_environment.MREnvironment(game_dir + '/' + 'montezuma_revenge' + '.bin', use_gui=True, repeat_action_probability=0.25, single_life=True)
     num_actions = len(env.ale.getMinimalActionSet())
     return env, num_actions

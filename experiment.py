@@ -6,7 +6,7 @@ import numpy as np
 import tqdm
 import os
 
-import atari
+from environments import atari
 
 game_dir = './roms'
 
