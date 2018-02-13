@@ -35,6 +35,7 @@ class Experiment:
             exp_dir_prime = self.exp_dir + '_' + str(count)
             while os.path.isdir(exp_dir_prime):
                 exp_dir_prime = self.exp_dir + '_' + str(count)
+                count += 1
             self.exp_dir = exp_dir_prime
         os.makedirs(self.exp_dir)
         self.results_file = open(os.path.join(self.exp_dir, 'results.txt'), 'w')

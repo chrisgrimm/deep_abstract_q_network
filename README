@@ -1,0 +1,8 @@
+Things to install:
+
+ALE (and everything that entails)
+scipy
+opencv-python
+boost
+
+CTS: compile library
