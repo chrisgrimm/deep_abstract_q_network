@@ -4,11 +4,10 @@ import numpy as np
 import tf_helpers as th
 from abstract_dqlearner import DQLearner
 import toy_mr_encoder
-from replay_memory_pc import MMCPathTracker
+from replay_memory_pc import MMCPathTracker, ReplayMemory
 
-import cpp_cts
+from cts import cts
 import atari_encoder
-from replay_memory import ReplayMemory
 
 
 class CTSDQLearner(DQLearner, object):
@@ -33,7 +32,7 @@ class CTSDQLearner(DQLearner, object):
             self.mmc_tracker = MMCPathTracker(self.replay_buffer, self.max_mmc_path_length, self.gamma)
 
         # Setup CTS
-        self.cts = cpp_cts.CPP_CTS(*self.cts_size)
+        self.cts = cts.CPP_CTS(*self.cts_size)
         self.encoding_func = self.get_encoding_func()
         if self.encoding_func is None:
             raise Exception('Encoding function ' + self.config['CTS']['ENCODING_FUNC'] + ' not found')
@@ -86,8 +85,6 @@ class CTSDQLearner(DQLearner, object):
         return action
 
     def record_experience(self, state, action, env_reward, next_state, is_terminal, episode_dict):
-        episode_dict['total_reward'] += env_reward
-
         enc_s = self.encoding_func(self.environment)
         n_hat = self.cts.psuedo_count_for_image(enc_s)
         R_plus = np.sign(env_reward) + (1 - is_terminal) * (self.bonus_beta * np.power(n_hat + 0.01, -0.5))

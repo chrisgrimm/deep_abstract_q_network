@@ -3,11 +3,11 @@ from ctypes import cdll
 import numpy as np
 from numpy.ctypeslib import ndpointer
 
-lib = cdll.LoadLibrary('/home/maroderi/projects/context_weighting_tree/libcwt.so')
-constructCTS = lib.construct_symbolic_CTS
+lib = cdll.LoadLibrary('cts/libcts.so')
+constructCTS = lib.construct_cts
 constructCTS.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int]
 constructCTS.restype = ctypes.c_void_p
-psuedo_count_for_image = lib.psuedo_count_for_image_symbolic
+psuedo_count_for_image = lib.psuedo_count_for_image
 psuedo_count_for_image.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_uint8)]
 psuedo_count_for_image.restype = ctypes.c_double
 

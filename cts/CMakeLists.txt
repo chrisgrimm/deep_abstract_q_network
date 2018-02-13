@@ -10,4 +10,4 @@ set(SOURCE_FILES
         python_api.cpp
         )
 
-add_library(cwt SHARED ${SOURCE_FILES})
+add_library(cts SHARED ${SOURCE_FILES})

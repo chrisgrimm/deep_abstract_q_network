@@ -15,6 +15,8 @@ class Experiment:
     def __init__(self, config_file):
         # Set configuration params
         self.config = configparser.ConfigParser()
+        if not os.path.isfile(config_file):
+            raise Exception('Could not find config file: ' + config_file)
         self.config.read(config_file)
         self.num_training_steps = int(self.config['EXP']['NUM_TRAINING_STEPS'])
         self.test_interval = int(self.config['EXP']['TEST_INTERVAL'])

@@ -4,7 +4,7 @@ import numpy as np
 import sys
 import dill
 
-from cts import cpp_cts
+from cts import cts
 from embedding_dqn import oo_l0_learner
 from embedding_dqn import value_iteration
 
@@ -214,7 +214,7 @@ class OORMaxLearner(interfaces.LearningAgent):
 
         self.cts = dict()
         if cts_size is not None:
-            self.global_cts = cpp_cts.CPP_CTS(*cts_size)
+            self.global_cts = cts.CPP_CTS(*cts_size)
         self.encoding_func = state_encoder
         self.bonus_beta = bonus_beta
         self.cts_size = cts_size
@@ -252,7 +252,7 @@ class OORMaxLearner(interfaces.LearningAgent):
                 # self.current_dqn_number += 1
 
                 if self.encoding_func is not None:
-                    self.cts[explore_action] = cpp_cts.CPP_CTS(*self.cts_size)
+                    self.cts[explore_action] = cts.CPP_CTS(*self.cts_size)
 
                 self.actions_for_pia[pia] = [explore_action]
                 self.explore_for_pia[pia] = explore_action
@@ -273,7 +273,7 @@ class OORMaxLearner(interfaces.LearningAgent):
         # The action does not exist, so add it
 
         if self.encoding_func is not None:
-            self.cts[new_action] = cpp_cts.CPP_CTS(*self.cts_size)
+            self.cts[new_action] = cts.CPP_CTS(*self.cts_size)
 
         for i, (att, att_goal) in goal_diff:
             pia = (preds, i, att)

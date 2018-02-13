@@ -2,7 +2,7 @@ import interfaces
 import tensorflow as tf
 import numpy as np
 import tf_helpers as th
-from cts import cpp_cts
+from cts import cts
 from cts import pc_cts
 from replay_memory_pc import ReplayMemory
 from replay_memory_pc import MMCPathTracker
@@ -101,7 +101,7 @@ class DQLearner(interfaces.LearningAgent):
         self.sess.run(self.copy_op)
 
         self.cts_size = cts_size
-        self.cts = cpp_cts.CPP_CTS(*cts_size)
+        self.cts = cts.CPP_CTS(*cts_size)
         self.encoding_func = state_encoder
         self.bonus_beta = bonus_beta
 
