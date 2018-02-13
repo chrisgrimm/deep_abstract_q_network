@@ -24,7 +24,6 @@ class Experiment:
         self.exp_dir = self.config['EXP']['DIRECTORY']
 
         self.environment, self.num_actions = self.get_environment()
-
         if self.environment is None:
             raise Exception('Environment ' + self.config['ENV']['ID'] + ' not found')
 
