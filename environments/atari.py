@@ -9,7 +9,7 @@ import pygame
 
 class AtariEnvironment(interfaces.Environment):
 
-    def __init__(self, config, use_gui=False, record_screen_dir=None):
+    def __init__(self, config, record_screen_dir=None):
         # Set configuration params
         self.config = config
         random_seed = int(self.config['ENV']['RANDOM_SEED'])
@@ -20,6 +20,7 @@ class AtariEnvironment(interfaces.Environment):
         self.frame_history_length = int(self.config['ENV']['FRAME_HISTORY_LENGTH'])
         self.max_num_frames = int(self.config['ENV']['MAX_NUM_FRAMES'])
         self.repeat_action_probability = float(self.config['ENV']['REPEAT_ACTION_PROBABILITY'])
+        self.use_gui = eval(self.config['ENV']['USE_GUI'])
 
         # Setup ALE
         self.ale = ALEInterface()
@@ -49,7 +50,6 @@ class AtariEnvironment(interfaces.Environment):
         self.screen_image = np.zeros(self.screen_height * self.screen_width, dtype=np.uint8)
 
         # Create GUI
-        self.use_gui = use_gui
         self.original_frame = np.zeros((h, w), dtype=np.uint8)
         self.refresh_time = datetime.timedelta(milliseconds=1000 / 60)
         self.last_refresh = datetime.datetime.now()

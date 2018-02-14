@@ -1,0 +1,36 @@
+Room 0/1 Nibbles - 0:
+Key: 0
+Door R: 2
+Door L: 3
+
+Room 2/3 Nibbles - 1:
+
+Room 4/5 Nibbles - 2:
+Torch: 0
+Door R: 2
+Door L: 3
+
+Room 6/7 Nibbles - 3:
+Key: 0
+Sword: 4
+
+Room 8/9 Nibbles - 4:
+Key: 4
+
+Room 10/11 Nibbles - 5:
+
+Room 12/13 Nibbles - 6:
+
+Room 14/15 Nibbles - 7:
+Key: 4
+
+Room 16/17 Nibbles - 8:
+Door R: 2
+Door L: 4
+
+Room 18/19 Nibbles - 9:
+Amulet: 0
+
+Room 20/21 Nibbles - 10:
+
+Room 22/23 Nibbles - 11:

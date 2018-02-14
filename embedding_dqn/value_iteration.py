@@ -1,6 +1,7 @@
 import numpy as np
 
-class ValueIteration():
+
+class ValueIteration:
     def __init__(self, gamma, max_VI_iterations, VI_delta):
         self.gamma = gamma
         self.max_VI_iterations = max_VI_iterations
@@ -50,4 +51,3 @@ class ValueIteration():
                         val += p * (r + self.gamma * utopia_val)
             qs[a] = val
         return qs
-

@@ -1,8 +1,6 @@
 import cv2
 import os
 import numpy as np
-from scipy import signal
-from embedding_dqn.abstraction_tools import abstraction_helpers as ah
 
 base_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../screenshots')
 screenshot = lambda name: cv2.imread(os.path.join(base_path, name+'.png'))

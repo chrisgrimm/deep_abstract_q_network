@@ -1,2 +1,0 @@
-model_checkpoint_path: "oo_net.ckpt"
-all_model_checkpoint_paths: "oo_net.ckpt"
