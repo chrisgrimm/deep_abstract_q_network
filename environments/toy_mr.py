@@ -95,28 +95,34 @@ class ToyMRAbstractState(AbstractState):
 
 class ToyMR(Environment):
 
-    def __init__(self, map_file, abstraction_file=None, max_num_actions=10000, max_lives=1, repeat_action_probability=0.0, use_gui=True):
+    def __init__(self, config):
+        # Set configuration params
+        self.config = config
+        self.use_gui = eval(self.config['ENV']['USE_GUI'])
+        self.map_file = self.config['ENV']['MAP_FILE']
+        self.abstraction_file = self.config['ENV']['ABSTRACTION_FILE']
+        self.max_num_actions = int(self.config['ENV']['MAX_NUM_ACTIONS'])
+        self.max_lives = int(self.config['ENV']['MAX_LIVES'])
+        self.repeat_action_probability = float(self.config['ENV']['REPEAT_ACTION_PROBABILITY'])
 
-        self.rooms, self.starting_room, self.starting_cell, self.goal_room, self.keys, self.doors = self.parse_map_file(map_file)
-        if abstraction_file is not None:
-            self.rooms_abs, self.rooms_abs_numeric_map = self.parse_abs_file(abstraction_file)
+        # Initialize variables
+        self.rooms, self.starting_room, self.starting_cell, self.goal_room, self.keys, self.doors = self.parse_map_file()
+        if self.abstraction_file is not None:
+            self.rooms_abs, self.rooms_abs_numeric_map = self.parse_abs_file(self.abstraction_file)
         else:
             self.rooms_abs, self.rooms_abs_numeric_map = None, None
         self.room = self.starting_room
         self.agent = self.starting_cell
         self.num_keys = 0
-        self.max_lives = max_lives
-        self.lives = max_lives
+        self.lives = self.max_lives
         self.enter_cell = self.agent
-        self.repeat_action_probability = repeat_action_probability
         self.previous_action = 0
         self.terminal = False
-        self.max_num_actions = max_num_actions
         self.discovered_rooms = set()
 
         self.key_neighbor_locs = []
         self.door_neighbor_locs = []
-        if abstraction_file is None:
+        if self.abstraction_file is None:
             for i, (key_room, key_pos) in enumerate(self.keys):
                 self.key_neighbor_locs.append(key_room)
             for i, (door_room, door_pos) in enumerate(self.doors):
@@ -127,12 +133,8 @@ class ToyMR(Environment):
             for i, (door_room, door_pos) in enumerate(self.doors):
                 self.door_neighbor_locs.append(self.neighbor_locs(door_room, door_pos))
 
-
-        self.use_gui = use_gui
-
         # useful game dimensions
         self.tile_size = 10
-
         self.hud_height = 10
 
         self.action_ticker = 0
@@ -233,14 +235,14 @@ class ToyMR(Environment):
         # than 10 abstract states for a room.
         return rooms, rooms_numeric_repr
 
-    def parse_map_file(self, map_file):
+    def parse_map_file(self):
         rooms = {}
         keys = {}
         doors = {}
 
         r = -1
         starting_room, starting_cell, goal_room = None, None, None
-        with open(map_file) as f:
+        with open(self.map_file) as f:
             for line in f.read().splitlines():
                 if r == -1:
                     room_x, room_y, room_w, room_h = map(int, line.split(' '))
@@ -804,7 +806,7 @@ class ToyMR(Environment):
 if __name__ == "__main__":
     map_file = 'mr_maps/four_rooms.txt' # 'mr_maps/full_mr_map.txt'
     abs_file = None # 'mr_maps/full_mr_map_abs.txt'
-    game = ToyMR(map_file, abstraction_file=abs_file, use_gui=True, max_lives=5)
+    game = ToyMR(map_file, abstraction_file=abs_file, max_lives=5)
 
     # map_image_file = 'mr_maps/full_mr_map'
     # game.save_map(map_image_file)

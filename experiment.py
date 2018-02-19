@@ -119,7 +119,7 @@ class Experiment:
             env = atari.AtariEnvironment(self.config)
             num_actions = len(env.ale.getMinimalActionSet())
         elif environment_id == 'toy_mr':
-            env = toy_mr.ToyMR('environments/mr_maps/full_mr_map.txt', abstraction_file='environments/mr_maps/full_mr_map_abs.txt')
+            env = toy_mr.ToyMR(self.config)
             num_actions = len(env.get_actions_for_state(None))
 
         return env, num_actions
