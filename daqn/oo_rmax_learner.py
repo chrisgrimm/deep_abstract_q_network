@@ -39,9 +39,9 @@ class L1ExploreAction(object):
 
 def make_diff(attrs1, attrs2):
     assert [a[0] for a in attrs1] == [a[0] for a in attrs2]
-    att_dict = {key1 : (val1, val2)
-                 for (key1, val1), (key2, val2) in zip(attrs1, attrs2)
-                 if val1 != val2}
+    att_dict = {key1: (val1, val2)
+                for (key1, val1), (key2, val2) in zip(attrs1, attrs2)
+                if val1 != val2}
     return tuple(sorted(att_dict.items()))
 
 
@@ -50,6 +50,7 @@ def apply_diff(attrs, diff):
     for key, (value1, value2) in diff:
         new_attrs[key] = value2
     return tuple(sorted(new_attrs.items()))
+
 
 def does_diff_apply(attrs, diff):
     attrs_dict = dict(attrs)
@@ -111,7 +112,7 @@ class MovingAverageTable(object):
 
     def get_success_rate(self, action):
         if action not in self.success_table or \
-                        len(self.success_table[action]) < self.success_moving_avg_len:
+                len(self.success_table[action]) < self.success_moving_avg_len:
             return 0
         return np.mean(self.success_table[action])
 
@@ -172,7 +173,7 @@ class MovingAverageTable(object):
         diff = make_diff(s, sp)
 
         if self.moving_avg_len is None:
-            return self.terminal_table[(diff, a)]/self.transition_table[(diff, a)]
+            return self.terminal_table[(diff, a)] / self.transition_table[(diff, a)]
         else:
             return np.mean(self.terminal_table[(diff, a)])
 
@@ -182,12 +183,13 @@ class OORMaxLearner(interfaces.LearningAgent):
         # Set configuration params
         self.config = config
         self.environment = environment
-        self.abs_func, self.pred_func = abstraction_helpers.get_abstraction_function(self.config['DAQN']['ABS_FUNC_ID'], self.environment)
+        self.abs_func, self.pred_func = abstraction_helpers.get_abstraction_function(self.config['DAQN']['ABS_FUNC_ID'],
+                                                                                     self.environment)
         self.rmax = float(self.config['DAQN']['RMAX'])
         self.gamma = float(self.config['DAQN']['GAMMA'])
         self.value_update_freq = int(self.config['DAQN']['VALUE_UPDATE_FREQ'])
         self.max_VI_iterations = int(self.config['DAQN']['MAX_VI_ITERATIONS'])
-        self.VI_delta = int(self.config['DAQN']['VI_DELTA'])
+        self.VI_delta = float(self.config['DAQN']['VI_DELTA'])
         self.min_epsilon = float(self.config['DAQN']['MIN_EPSILON'])
         self.using_global_epsilon = eval(self.config['DAQN']['USING_GLOBAL_EPSILON'])
 
@@ -299,7 +301,7 @@ class OORMaxLearner(interfaces.LearningAgent):
                 if type(a) is not L1ExploreAction and \
                         a in self.transition_table.a_count and \
                         (self.transition_table.a_count[a] >= self.transition_table.num_conf or evaluation) and \
-                                a in self.transition_table.valid_transitions:
+                        a in self.transition_table.valid_transitions:
                     Z = np.sum(
                         [self.transition_table.get_p(s, a, apply_diff(s, diff)) for diff in
                          self.transition_table.valid_transitions[a] if does_diff_apply(s, diff)])
@@ -316,10 +318,10 @@ class OORMaxLearner(interfaces.LearningAgent):
                 transitions[(s, a)] = transitions_sa
 
         if evaluation:
-            self.evaluation_values, self.evaluation_qs =\
+            self.evaluation_values, self.evaluation_qs = \
                 self.value_iteration.run_vi(self.evaluation_values, self.states, actions_for_state, transitions, 0)
         else:
-            self.values, self.qs =\
+            self.values, self.qs = \
                 self.value_iteration.run_vi(self.values, self.states, actions_for_state, transitions, self.utopia_val)
 
     def get_all_actions_for_state(self, state):
@@ -341,13 +343,14 @@ class OORMaxLearner(interfaces.LearningAgent):
         #     return max(0, 1./len(self.transition_table.actions) - prop)
         return self.transition_table.get_r(s, a, sp)
 
-    def run_learning_episode(self, environment, max_episode_steps=None):
+    def run_learning_episode(self, environment, episode_dict, max_episode_steps=None):
         total_episode_steps = 0
         total_reward = 0
 
         # evaluation_episode = bool(np.random.randint(0, 2))
 
-        while not self.environment.is_current_state_terminal() and (max_episode_steps is None or total_episode_steps < max_episode_steps):
+        while not self.environment.is_current_state_terminal() and (
+                max_episode_steps is None or total_episode_steps < max_episode_steps):
 
             s = self.abs_func(self.environment.get_current_state())
 
@@ -365,7 +368,7 @@ class OORMaxLearner(interfaces.LearningAgent):
                 self.run_vi()
                 # self.run_vi(evaluation=True)
 
-            a = self.get_l1_action(s) #, evaluation=evaluation_episode)
+            a = self.get_l1_action(s)  # , evaluation=evaluation_episode)
 
             if self.using_global_epsilon:
                 # TODO: implement
@@ -393,11 +396,12 @@ class OORMaxLearner(interfaces.LearningAgent):
 
             dqn_number = a.dqn_number
 
-            episode_steps, R, sp = self.l0_learner.run_learning_episode(self.environment,
-                                                                        {'initial_l1_state': s,
-                                                                         'goal_l1_state': s_goal,
-                                                                         'dqn_number': dqn_number,
-                                                                         'epsilon': epsilon})
+            episode_dict = {'initial_l1_state': s,
+                            'goal_l1_state': s_goal,
+                            'dqn_number': dqn_number,
+                            'epsilon': epsilon}
+            episode_steps, R = self.l0_learner.run_learning_episode(self.environment, episode_dict)
+            sp = self.abs_func(self.environment.get_current_state())
 
             if type(a) is not L1ExploreAction:
                 true_diff = make_diff(s, sp)

@@ -2,3 +2,6 @@
 *.ckpt.*
 *.npy
 .idea
+.so
+.cmake
+.cbp

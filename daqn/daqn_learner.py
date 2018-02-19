@@ -12,12 +12,14 @@ class DAQNLearner(DQLearner, object):
         # Add tensorflow placeholder
         self.inp_dqn_numbers = tf.placeholder(tf.int32, [None])
 
-        super(DAQNLearner, self).__init__(config, environment, restore_network_file=restore_network_file)
-
         # Set configuration params
-        self.replay_memory_size = int(self.config['DQL']['REPLAY_MEMORY_SIZE'])
-        self.max_dqn_number = int(self.config['DAQN']['MAX_DQN_NUMBER'])
-        self.abs_func, self.pred_func = abstraction_helpers.get_abstraction_function(self.config['DAQN']['ABS_FUNC_ID'], self.environment)
+        self.replay_memory_size = int(config['DQL']['REPLAY_MEMORY_SIZE'])
+        self.max_dqn_number = int(config['DAQN']['MAX_DQN_NUMBER'])
+        self.abs_func, self.pred_func = abstraction_helpers.get_abstraction_function(config['DAQN']['ABS_FUNC_ID'],
+                                                                                     environment)
+
+        # Run the init on the subclass
+        super(DAQNLearner, self).__init__(config, environment, restore_network_file=restore_network_file)
 
         # Initialize variables
         self.abs_neighbors = dict()
@@ -45,9 +47,9 @@ class DAQNLearner(DQLearner, object):
 
     def update_q_values(self, step, episode_dict):
         if 'dqn_distribution' in episode_dict.keys():
-            S1, DQNNumbers, A, R, R_explore, MMC_R, MMC_R_explore, S2, T, M1, M2 = self.replay_buffer.sample(self.batch_size)
-        else:
             S1, DQNNumbers, A, R, R_explore, MMC_R, MMC_R_explore, S2, T, M1, M2 = self.replay_buffer.sample_from_distribution(self.batch_size, episode_dict['dqn_distribution'])
+        else:
+            S1, DQNNumbers, A, R, R_explore, MMC_R, MMC_R_explore, S2, T, M1, M2 = self.replay_buffer.sample(self.batch_size)
 
         Aonehot = np.zeros((self.batch_size, self.num_actions), dtype=np.float32)
         Aonehot[range(len(A)), A] = 1
@@ -56,7 +58,7 @@ class DAQNLearner(DQLearner, object):
             print 'DQN Number outside range'
 
         [_, loss] = self.sess.run(
-            [self.train_op, self.loss, self.q_online, self.q_target],
+            [self.train_op, self.loss],
             feed_dict={self.inp_frames: S1, self.inp_actions: Aonehot,
                        self.inp_sp_frames: S2, self.inp_reward: R, self.inp_mmc_reward: MMC_R,
                        self.inp_terminated: T, self.inp_mask: M1, self.inp_sp_mask: M2,
@@ -102,3 +104,8 @@ class DAQNLearner(DQLearner, object):
         else:
             sars = (state[-1], dqn_number, action, R, 0, 0, 0, next_state[-1], episode_finished)
             self.replay_buffer.append(*sars)
+
+    def extra_termination_conditions(self, step, episode_dict):
+        initial_l1_state = episode_dict['initial_l1_state']
+        new_l1_state = self.abs_func(self.environment.get_current_state())
+        return initial_l1_state != new_l1_state
