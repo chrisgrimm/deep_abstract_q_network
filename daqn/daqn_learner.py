@@ -65,11 +65,11 @@ class DAQNLearner(DQLearner, object):
                        self.inp_dqn_numbers: DQNNumbers})
         return loss
 
-    def get_action(self, state, environment, episode_dict):
+    def get_action(self, state, episode_dict):
         epsilon = episode_dict['epsilon']
 
         if np.random.uniform(0, 1) < epsilon:
-            action = np.random.choice(environment.get_actions_for_state(state))
+            action = np.random.choice(self.environment.get_actions_for_state(state))
         else:
             state_input = np.transpose(state, [1, 2, 0])
 

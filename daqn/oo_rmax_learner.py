@@ -490,7 +490,7 @@ class OORMaxLearner(interfaces.LearningAgent):
         action = np.random.choice(np.array(keys)[(np.max(values) - np.array(values)) < 0.00001])
         return action
 
-    def get_action(self, state, evaluation=False):
+    def get_action(self, state, episode_dict, evaluation=False):
         l1_state = self.abs_func(state)
 
         if l1_state == self.last_evaluation_state:
@@ -507,8 +507,8 @@ class OORMaxLearner(interfaces.LearningAgent):
         if type(l1_action) is L1ExploreAction:
             return np.random.choice(self.environment.get_actions_for_state(state))
         else:
-            return self.l0_learner.get_action(state, self.environment,
-                                              {'dqn_number': l1_action.dqn_number})
+            return self.l0_learner.get_action(state, {'dqn_number': l1_action.dqn_number,
+                                                      'epsilon': 0})
 
     def save_network(self, file_name):
         with open(file_name + '_transition_table.pickle', 'w') as f:

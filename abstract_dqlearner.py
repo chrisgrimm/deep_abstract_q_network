@@ -1,10 +1,12 @@
 import configparser
 
 import tensorflow as tf
+
+import interfaces
 import tf_helpers as th
 
 
-class DQLearner:
+class DQLearner(interfaces.LearningAgent):
 
     def __init__(self, config, environment, restore_network_file=None):
 
@@ -111,7 +113,7 @@ class DQLearner:
 
             # Get action
             state = environment.get_current_state()
-            action = self.get_action(state, environment, episode_dict)
+            action = self.get_action(state, episode_dict)
 
             # Act
             state, action, env_reward, next_state, is_terminal = environment.perform_action(action)
@@ -142,7 +144,7 @@ class DQLearner:
     def extra_termination_conditions(self, step, episode_dict):
         return False
 
-    def get_action(self, state, environment, episode_dict):
+    def get_action(self, state, episode_dict):
         raise NotImplemented
 
     def record_experience(self, state, action, env_reward, next_state, is_terminal, episode_dict):

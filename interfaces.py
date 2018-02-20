@@ -19,10 +19,10 @@ class Environment(object):
 
 class LearningAgent(object):
 
-    def run_learning_episode(self, environment):
+    def run_learning_episode(self, environment, episode_dict):
         raise NotImplemented
 
-    def get_action(self, state):
+    def get_action(self, state, episode_dict):
         raise NotImplemented
 
 

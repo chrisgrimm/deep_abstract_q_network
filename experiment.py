@@ -61,7 +61,7 @@ class Experiment:
             if np.random.uniform(0, 1) < self.test_epsilon:
                 action = np.random.choice(self.environment.get_actions_for_state(state))
             else:
-                action = self.agent.get_action(state, self.environment, {})
+                action = self.agent.get_action(state, {})
 
             state, action, reward, next_state, is_terminal = self.environment.perform_action(action)
             total_reward += reward
