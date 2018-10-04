@@ -1,8 +1,19 @@
 Things to install:
 
-ALE (and everything that entails)
-scipy
+apt-get repos:
 opencv-python
+cmake
+
+dependencies?:
+ALE (and everything that entails)
+
+pip packages:
+numpy
+tensorflow
+scipy
 boost
+tqdm
+configparser
+dill
 
 CTS: compile library
