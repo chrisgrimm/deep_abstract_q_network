@@ -21,5 +21,6 @@ class AbstractAtariEnvironment(atari.AtariEnvironment):
 
     def abstraction(self, state):
         # TODO implement abstraction tree.
+        pass
 
 
