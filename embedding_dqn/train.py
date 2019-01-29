@@ -199,48 +199,50 @@ def train_hadooqn(env, num_actions):
     training_epsilon = 0.01
     test_epsilon = 0.001
 
-    # frame_history = 1
-    # abs_size = 33
-    # rmax = 1
-    #
-    # # abs_func = env.oo_sector_abstraction
-    # # pred_func = env.sector_predicate_func
-    #
+    frame_history = 1
+    abs_size = 33
+    rmax = 1
+
+    # abs_func = env.oo_sector_abstraction
+    # pred_func = env.sector_predicate_func
+
+    abs_func = env.oo_abstraction
+    abs_reset_func = None
+    pred_func = env.predicate_func
+    enc_func = None
+    cts_size = None
+    results_dir = './results/hadooqn/%s_sectors' % game
+
     # abs_func = env.oo_abstraction
     # pred_func = env.predicate_func
-    # enc_func = None
-    # cts_size = None
-    # results_dir = './results/hadooqn/%s_sectors' % game
+    # enc_func = toy_mr_encoder.encode_toy_mr_state
+    # cts_size = (11, 12, 6)
+    # results_dir = './results/hadooqn/%s_cts' % game
+
+    # frame_history = 4
     #
-    # # abs_func = env.oo_abstraction
-    # # pred_func = env.predicate_func
-    # # enc_func = toy_mr_encoder.encode_toy_mr_state
-    # # cts_size = (11, 12, 6)
-    # # results_dir = './results/hadooqn/%s_cts' % game
-
-    frame_history = 4
-
-    abs = mr_abs.MRAbstraction(env, use_sectors=True)
-    rmax = 1000
-
-    # abs = venture_abstraction.VentureAbstraction(env, use_sectors=True)
-    # rmax = 200
-
-    # abs = hero_abstraction.HeroAbstraction(env, use_sectors=True)
+    # abs = mr_abs.MRAbstraction(env, use_sectors=True)
     # rmax = 1000
-
-    abs_func = abs.oo_abstraction_function
-    pred_func = abs.predicate_func
-    abs_reset_func = abs.reset
-    abs_size = 24 + 10
-    enc_func = None # atari_encoder.encode_state
-    cts_size = (42, 42, 8)
-    # env.abstraction = abs
-    results_dir = './results/hadooqn/%s_sectors_fixed_abstraction' % game
+    #
+    # # abs = venture_abstraction.VentureAbstraction(env, use_sectors=True)
+    # # rmax = 200
+    #
+    # # abs = hero_abstraction.HeroAbstraction(env, use_sectors=True)
+    # # rmax = 1000
+    #
+    # abs_func = abs.oo_abstraction_function
+    # pred_func = abs.predicate_func
+    # abs_reset_func = abs.reset
+    # abs_size = 24 + 10
+    # enc_func = None # atari_encoder.encode_state
+    # cts_size = (42, 42, 8)
+    # # env.abstraction = abs
+    # results_dir = './results/hadooqn/%s_sectors_fixed_abstraction' % game
 
     with tf.device('/gpu:0'):
         agent = oo_rmax_learner.OORMaxLearner(abs_size, env, abs_func, pred_func, abs_reset_func, frame_history=frame_history,
-                                              state_encoder=enc_func, cts_size=cts_size, bonus_beta=0.05, rmax=rmax)
+                                              state_encoder=enc_func, cts_size=cts_size, bonus_beta=0.05, rmax=rmax,
+                                              rnd=True)
 
     train(agent, env, test_epsilon, results_dir, abs_reset_func)
 
@@ -304,18 +306,18 @@ def setup_mr_env(frame_history_length=1):
 # train_rmax_daqn(*setup_toy_mr_env())
 # train_oo_rmax_daqn(*setup_toy_mr_env())
 
-# game = 'toy_mr'
-# end_life_is_terminal = False
-# train_hadooqn(*setup_toy_mr_env())
+game = 'toy_mr'
+end_life_is_terminal = False
+train_hadooqn(*setup_toy_mr_env())
 
 # game = 'four_rooms'
 # end_life_is_terminal = False
 # train_hadooqn(*setup_four_rooms_env())
 
-game = 'montezuma_revenge'
-end_life_is_terminal = True
-# end_life_is_terminal = False
-train_hadooqn(*setup_mr_env(frame_history_length=4))
+# game = 'montezuma_revenge'
+# end_life_is_terminal = True
+# # end_life_is_terminal = False
+# train_hadooqn(*setup_mr_env(frame_history_length=4))
 
 # game = 'venture'
 # # end_life_is_terminal = True

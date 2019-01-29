@@ -12,7 +12,7 @@ class RND_Array(object):
     def __init__(self,
                  num_rnds,
                  num_frames_for_normalization,
-                 name,
+                 name='rnd_array',
                  reuse=None):
         frame_history = 1
         self.inp_shape = inp_shape = [84, 84, frame_history]
@@ -24,7 +24,6 @@ class RND_Array(object):
         self.s_mean = np.zeros([84, 84, frame_history], dtype=np.float32)
         self.s_std = np.zeros([84, 84, frame_history], dtype=np.float32)
         self.r_std = 0
-
 
 
 

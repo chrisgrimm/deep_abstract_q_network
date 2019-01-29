@@ -61,7 +61,7 @@ class MovingAverageTable(object):
             self.transition_table[(s, a, sp_)].append(1. if sp == sp_ else 0.)
         self.reward_table[key].append(r)
 
-    def get_p(self, s, a, sp):
+    def     get_p(self, s, a, sp):
         return np.mean(self.transition_table[(s, a, sp)])
 
     def get_r(self, s, a, sp, evaluation=False):

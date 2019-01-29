@@ -1,12 +1,14 @@
 
 import tensorflow as tf
 import numpy as np
+
 import tf_helpers as th
 import oo_rmax_learner
 from oo_replay_memory import MMCPathTracker
 from oo_replay_memory import MMCPathTrackerExplore
 from oo_replay_memory import ReplayMemory
 from collections import deque
+import rnd_replay_memory
 
 
 def construct_root_network(input, frame_history):
@@ -262,6 +264,12 @@ class MultiHeadedDQLearner():
         self.gamma = gamma
         self.max_dqn_number = max_dqn_number
 
+        self.rnd_replay_memory = []
+        self.rnd_experience_counter = []
+        for i in range(self.max_dqn_number):
+            self.rnd_replay_memory.append(None)
+            self.rnd_experience_counter.append(0)
+
         # q_constructor = lambda inp: construct_q_network_weights(inp, self.inp_dqn_numbers, max_dqn_number, frame_history, num_actions)
         #q_constructor = lambda inp: construct_small_network_weights(inp, self.inp_dqn_numbers, max_dqn_number,
         #                                                            frame_history, num_actions)
@@ -379,7 +387,7 @@ class MultiHeadedDQLearner():
         return loss
 
     def run_learning_episode(self, environment, initial_l1_state, goal_l1_state, l1_action, dqn_number, abs_func,
-                             epsilon, max_episode_steps=100000, cts=None, dqn_distribution=None):
+                             epsilon, max_episode_steps=100000, cts=None, rnd=None, dqn_distribution=None):
         episode_steps = 0
         total_reward = 0
         episode_finished = False
@@ -429,19 +437,29 @@ class MultiHeadedDQLearner():
             else:
                 reward = 0
 
-            if cts is None:
+            # if dqn_number != -1:
+            term = is_terminal if cts is not None else (is_terminal or episode_finished)
+
+            if cts is None and rnd is None:
                 R_plus = 0
-            else:
+            elif cts is not None:
                 enc_s = self.encoding_func(environment)
                 n_hat = cts.psuedo_count_for_image(enc_s)
                 R_plus = (1 - is_terminal) * (self.bonus_beta * np.power(n_hat + 0.01, -0.5))
                 self.n_hat_tracker[l1_action].append(n_hat)
+            elif rnd is not None:
+                R_plus = rnd.get_intrinsic_rewards(self, state[-1], dqn_number)
+                if self.rnd_replay_memory[dqn_number] is None:
+                    self.rnd_replay_memory[dqn_number] = rnd_replay_memory.ReplayMemory((84, 84), 'uint8', 100, rnd.frame_history)
+                self.rnd_replay_memory[dqn_number].append(state[-1], term)
+                self.rnd_experience_counter[dqn_number] += 1
+                if self.rnd_experience_counter[dqn_number] % self.batch_size == 0:
+                    S = self.rnd_experience_counter[dqn_number].sample(self.batch_size)
+                    rnd.train_step(S, dqn_number)
 
             # R_plus = (self.reward_mult * np.sign(reward)) + R_plus
             R = (self.reward_mult * np.sign(reward))
 
-            # if dqn_number != -1:
-            term = is_terminal if cts is not None else (is_terminal or episode_finished)
             if self.use_mmc:
                 sars = (state[-1], dqn_number, action, R, R_plus, next_state[-1],
                         term)

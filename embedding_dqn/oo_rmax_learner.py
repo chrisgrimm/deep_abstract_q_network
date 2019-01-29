@@ -4,10 +4,10 @@ import numpy as np
 import sys
 import dill
 
-from cts import cpp_cts
+# from cts import cpp_cts
 from embedding_dqn import oo_l0_learner
 from embedding_dqn import value_iteration
-
+from random_network_distillation import RND_Array
 
 class L1ExploreAction(object):
     def __init__(self, attrs, key, pred, dqn_number=-1):
@@ -179,7 +179,8 @@ class MovingAverageTable(object):
 class OORMaxLearner(interfaces.LearningAgent):
     def __init__(self, abs_size, env, abs_func, pred_func, N=1000, max_VI_iterations=100, value_update_freq=1000, VI_delta=0.01, gamma=0.99, rmax=1,
                  max_num_abstract_states=10, frame_history=1, restore_file=None, error_clip=1,
-                 state_encoder=None, bonus_beta=0.05, cts_size=None, use_min_psuedo_count=False):
+                 state_encoder=None, bonus_beta=0.05, cts_size=None, use_min_psuedo_count=False,
+                 rnd=False):
         self.env = env
         self.abs_size = abs_size
         self.abs_func = abs_func
@@ -220,6 +221,11 @@ class OORMaxLearner(interfaces.LearningAgent):
         self.cts_size = cts_size
         self.using_global_epsilon = False # state_encoder is not None
         self.use_min_psuedo_count = use_min_psuedo_count
+
+        if rnd:
+            self.rnd = RND_Array(300, 100)
+        else:
+            self.rnd = None
 
         if restore_file is None:
             self.create_new_state(self.abs_func(self.env.get_current_state()))
@@ -413,7 +419,8 @@ class OORMaxLearner(interfaces.LearningAgent):
             episode_steps, R, sp = self.l0_learner.run_learning_episode(self.env, s, s_goal, a,
                                                                         dqn_number, self.abs_func, epsilon,
                                                                         max_episode_steps=1000,
-                                                                        cts=cts, dqn_distribution=dqn_distribution)
+                                                                        cts=cts, dqn_distribution=dqn_distribution,
+                                                                        rnd=self.rnd)
 
             if type(a) is not L1ExploreAction:
                 true_diff = make_diff(s, sp)
