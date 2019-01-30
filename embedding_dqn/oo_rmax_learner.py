@@ -223,7 +223,7 @@ class OORMaxLearner(interfaces.LearningAgent):
         self.use_min_psuedo_count = use_min_psuedo_count
 
         if rnd:
-            self.rnd = RND_Array(300, 100)
+            self.rnd = RND_Array(10, 100)
         else:
             self.rnd = None
 

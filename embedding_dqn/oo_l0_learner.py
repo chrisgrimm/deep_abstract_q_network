@@ -425,6 +425,7 @@ class MultiHeadedDQLearner():
                 self.epsilon[l1_action] = max(self.epsilon_min, self.epsilon[l1_action] - self.epsilon_delta)
 
             state, action, env_reward, next_state, is_terminal = environment.perform_action(action)
+            rnd.update_state_normalizations(np.reshape(state[-1], [84,84,1]), dqn_number)
             total_reward += env_reward
 
             new_l1_state = abs_func(next_state)
@@ -448,9 +449,10 @@ class MultiHeadedDQLearner():
                 R_plus = (1 - is_terminal) * (self.bonus_beta * np.power(n_hat + 0.01, -0.5))
                 self.n_hat_tracker[l1_action].append(n_hat)
             elif rnd is not None:
-                R_plus = rnd.get_intrinsic_rewards(self, state[-1], dqn_number)
+                R_plus = rnd.get_intrinsic_rewards(state[-1], dqn_number)
+                rnd.update_reward_normalizations(R_plus, dqn_number)
                 if self.rnd_replay_memory[dqn_number] is None:
-                    self.rnd_replay_memory[dqn_number] = rnd_replay_memory.ReplayMemory((84, 84), 'uint8', 100, rnd.frame_history)
+                    self.rnd_replay_memory[dqn_number] = rnd_replay_memory.ReplayMemory((84, 84), 'uint8', 100, 1)
                 self.rnd_replay_memory[dqn_number].append(state[-1], term)
                 self.rnd_experience_counter[dqn_number] += 1
                 if self.rnd_experience_counter[dqn_number] % self.batch_size == 0:
