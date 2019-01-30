@@ -65,7 +65,7 @@ class RND_Array(object):
     # pass in a batch of input states and the DQN index for them, get out a batch of intrinsic rewards
     def get_intrinsic_rewards(self, inp_s, dqn_index):
         #assert len(self.last_n_rewards) == self.n
-        if len(self.last_n_rewards) < self.n:
+        if len(self.last_n_rewards[dqn_index]) < self.n:
             return np.random.uniform(0, 1)
         sq_diff = self.rnd_square_diffs[dqn_index]
         reward = self.sess.run([sq_diff], feed_dict={self.inp_s: inp_s,
