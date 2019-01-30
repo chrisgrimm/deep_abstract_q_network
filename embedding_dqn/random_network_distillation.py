@@ -75,7 +75,8 @@ class RND_Array(object):
 
     # pass in a batch of input states and the DQN index, run a training step for that DQN.
     def train_step(self, inp_s, dqn_index):
-        assert len(self.last_n_frames) == self.n
+        if len(self.last_n_frames[dqn_index]) < self.n:
+            return -1
         loss, train_op = self.rnd_losses[dqn_index], self.rnd_train_ops[dqn_index]
         _, _loss = self.sess.run([train_op, loss], feed_dict={self.inp_s: inp_s,
                                                               self.inp_s_mean: self.s_mean[dqn_index],
