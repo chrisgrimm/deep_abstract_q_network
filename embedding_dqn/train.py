@@ -287,6 +287,11 @@ def setup_four_rooms_env():
     num_actions = len(env.get_actions_for_state(None))
     return env, num_actions
 
+def setup_deadly_four_rooms_env():
+    env = toy_mr.ToyMR('../mr_maps/four_rooms.txt', max_num_actions=10000)
+    num_actions = len(env.get_actions_for_state(None))
+    return env, num_actions
+
 def setup_toy_mr_env():
     env = toy_mr.ToyMR('../mr_maps/full_mr_map.txt', abstraction_file='../mr_maps/full_mr_map_abs.txt')
     num_actions = len(env.get_actions_for_state(None))
@@ -306,13 +311,17 @@ def setup_mr_env(frame_history_length=1):
 # train_rmax_daqn(*setup_toy_mr_env())
 # train_oo_rmax_daqn(*setup_toy_mr_env())
 
-game = 'toy_mr'
-end_life_is_terminal = False
-train_hadooqn(*setup_toy_mr_env())
+# game = 'toy_mr'
+# end_life_is_terminal = False
+# train_hadooqn(*setup_toy_mr_env())
 
 # game = 'four_rooms'
 # end_life_is_terminal = False
 # train_hadooqn(*setup_four_rooms_env())
+
+game = 'deadly_four_rooms'
+end_life_is_terminal = False
+train_hadooqn(*setup_deadly_four_rooms_env())
 
 # game = 'montezuma_revenge'
 # end_life_is_terminal = True

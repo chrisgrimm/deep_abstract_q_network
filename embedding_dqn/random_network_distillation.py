@@ -25,14 +25,10 @@ class RND_Array(object):
         self.s_std = [np.zeros([84, 84, frame_history], dtype=np.float32) for _ in range(num_rnds)]
         self.r_std = [0 for _ in range(num_rnds)]
 
-
-
-
         # build everything
         self.inp_s = tf.placeholder(tf.uint8, [None]+inp_shape)
         self.inp_s_mean = tf.placeholder(tf.float32, inp_shape)
         self.inp_s_std = tf.placeholder(tf.float32, inp_shape)
-
 
         self.vars = self.build_array(name, reuse=reuse)
 
@@ -45,9 +41,7 @@ class RND_Array(object):
 
     # updates the normalizations with a new *single* image (shape=[84,84,1]).
     def update_state_normalizations(self, inp_s, dqn_idx):
-        print(inp_s.shape, self.inp_shape)
         assert inp_s.shape == tuple(self.inp_shape)
-        print(inp_s.dtype)
         inp_s = inp_s / 255.
         self.last_n_frames[dqn_idx].append(inp_s)
         self.last_n_frames[dqn_idx] = self.last_n_frames[dqn_idx][-self.n:]
@@ -70,7 +64,7 @@ class RND_Array(object):
         sq_diff = self.rnd_square_diffs[dqn_index]
         reward = self.sess.run([sq_diff], feed_dict={self.inp_s: inp_s,
                                                      self.inp_s_mean: self.s_mean[dqn_index],
-                                                     self.inp_s_std: self.s_std})
+                                                     self.inp_s_std: self.s_std[dqn_index]})
         return reward / self.r_std[dqn_index]
 
     # pass in a batch of input states and the DQN index, run a training step for that DQN.

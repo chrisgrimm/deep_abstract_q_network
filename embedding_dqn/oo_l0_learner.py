@@ -234,7 +234,7 @@ def construct_q_loss(
 class MultiHeadedDQLearner():
     def __init__(self, abs_size, num_actions, num_abstract_states, gamma=0.99, learning_rate=0.00025,
                  replay_start_size=5000,
-                 epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=1000000,
+                 epsilon_start=1.0, epsilon_end=0.01, epsilon_steps=100000,
                  update_freq=4, target_copy_freq=30000, replay_memory_size=1000000,
                  frame_history=4, batch_size=32, error_clip=1, restore_network_file=None, double=True,
                  use_mmc=True, max_mmc_path_length=1000, mmc_beta=0.1, max_dqn_number=300, rmax_learner=None,
@@ -393,8 +393,8 @@ class MultiHeadedDQLearner():
         episode_finished = False
         new_l1_state = initial_l1_state
         dqn_tuple = (initial_l1_state, goal_l1_state)
-        if l1_action not in self.epsilon:
-            self.epsilon[l1_action] = 1.0
+        if dqn_number not in self.epsilon:
+            self.epsilon[dqn_number] = 1.0
             self.n_hat_tracker[l1_action] = deque(maxlen=10000)
 
         for steps in range(max_episode_steps):
@@ -422,7 +422,7 @@ class MultiHeadedDQLearner():
 
             if self.replay_buffer.size() > self.replay_start_size:
                 self.global_epsilon = max(self.epsilon_min, self.global_epsilon - self.epsilon_delta)
-                self.epsilon[l1_action] = max(self.epsilon_min, self.epsilon[l1_action] - self.epsilon_delta)
+                self.epsilon[dqn_number] = max(self.epsilon_min, self.epsilon[dqn_number] - self.epsilon_delta)
 
             state, action, env_reward, next_state, is_terminal = environment.perform_action(action)
             rnd.update_state_normalizations(np.reshape(state[-1], [84,84,1]), dqn_number)
@@ -449,14 +449,14 @@ class MultiHeadedDQLearner():
                 R_plus = (1 - is_terminal) * (self.bonus_beta * np.power(n_hat + 0.01, -0.5))
                 self.n_hat_tracker[l1_action].append(n_hat)
             elif rnd is not None:
-                R_plus = rnd.get_intrinsic_rewards(state[-1], dqn_number)
+                R_plus = rnd.get_intrinsic_rewards(state[-1][np.newaxis, :, :, np.newaxis], dqn_number)
                 rnd.update_reward_normalizations(R_plus, dqn_number)
                 if self.rnd_replay_memory[dqn_number] is None:
                     self.rnd_replay_memory[dqn_number] = rnd_replay_memory.ReplayMemory((84, 84), 'uint8', 100, 1)
                 self.rnd_replay_memory[dqn_number].append(state[-1], term)
                 self.rnd_experience_counter[dqn_number] += 1
                 if self.rnd_experience_counter[dqn_number] % self.batch_size == 0:
-                    S = self.rnd_experience_counter[dqn_number].sample(self.batch_size)
+                    S = self.rnd_replay_memory[dqn_number].sample(self.batch_size)
                     rnd.train_step(S, dqn_number)
 
             # R_plus = (self.reward_mult * np.sign(reward)) + R_plus

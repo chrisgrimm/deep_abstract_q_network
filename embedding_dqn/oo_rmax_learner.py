@@ -219,7 +219,7 @@ class OORMaxLearner(interfaces.LearningAgent):
         self.encoding_func = state_encoder
         self.bonus_beta = bonus_beta
         self.cts_size = cts_size
-        self.using_global_epsilon = False # state_encoder is not None
+        self.using_global_epsilon = True # state_encoder is not None
         self.use_min_psuedo_count = use_min_psuedo_count
 
         if rnd:
